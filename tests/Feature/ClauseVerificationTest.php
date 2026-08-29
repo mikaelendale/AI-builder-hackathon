@@ -7,6 +7,7 @@ use App\Models\Interview;
 use App\Services\ClauseRuleEngine;
 use App\Services\SheetAggregator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ClauseVerificationTest extends TestCase
@@ -75,6 +76,36 @@ class ClauseVerificationTest extends TestCase
         $this->assertEquals('unclear', $data['verdicts']['hours_threshold']['status']);
         $this->assertNotEmpty($data['follow_ups']);
         $this->assertEquals('hours_threshold', $data['follow_ups'][0]['clause_key']);
+    }
+
+    public function test_abel_answering_follow_up_re_evaluates_verdicts(): void
+    {
+        $beneficiary = Beneficiary::create([
+            'name' => 'Abel',
+            'persona_type' => 'abel',
+            'phone_type' => 'feature_phone',
+            'language' => 'am',
+        ]);
+
+        $interview = Interview::create([
+            'beneficiary_id' => $beneficiary->id,
+            'status' => 'in_progress',
+            'consent_given' => true,
+        ]);
+
+        // First pass: ambiguous duration
+        $this->postJson("/interviews/{$interview->id}/transcript", [
+            'transcript' => "My name is Abel, 19 years old. I work after the rains.",
+        ]);
+
+        // Second pass: Abel provides precise hours
+        $followUpResponse = $this->postJson("/interviews/{$interview->id}/transcript", [
+            'transcript' => "In a typical week I work 35 hours per week on regular shifts.",
+        ]);
+
+        $followUpResponse->assertOk();
+        $data = $followUpResponse->json();
+        $this->assertEquals('met', $data['verdicts']['hours_threshold']['status']);
     }
 
     public function test_under_15_hard_case_stops_interview_immediately(): void
@@ -148,5 +179,17 @@ class ClauseVerificationTest extends TestCase
 
         $this->assertFalse($sheetRow->is_good_job);
         $this->assertTrue($sheetRow->discrepancy_flag);
+    }
+
+    public function test_audio_transcription_endpoint(): void
+    {
+        $fakeAudio = UploadedFile::fake()->create('sample.webm', 100, 'audio/webm');
+
+        $response = $this->postJson('/api/audio/transcribe', [
+            'audio' => $fakeAudio,
+        ]);
+
+        $response->assertOk();
+        $this->assertArrayHasKey('text', $response->json());
     }
 }
