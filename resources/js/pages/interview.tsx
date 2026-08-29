@@ -23,6 +23,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -397,7 +398,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         setIsRecording(false);
     };
 
-    // Upload audio blob to backend Groq Whisper endpoint
+    // Upload audio blob to backend Groq Whisper / Addis AI endpoint
     const uploadAudioForTranscription = async (blob: Blob) => {
         setIsTranscribingAudio(true);
         try {
@@ -415,7 +416,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
             const data = await res.json();
             if (data.text) {
-                setAudioProviderNotice(data.provider || 'Groq Whisper Turbo');
+                setAudioProviderNotice(data.provider || 'Addis AI / Whisper');
                 const newText = data.text;
                 setTranscript((prev) => (prev ? `${prev}\n${newText}` : newText));
                 setDisplayedTranscript((prev) => (prev ? `${prev}\n${newText}` : newText));
@@ -506,61 +507,64 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         <>
             <Head title="Live Beneficiary Voice Interview (Phase 3 Voice Loop)" />
 
-            <div className="min-h-screen bg-neutral-950 py-4 px-2 sm:px-4 text-neutral-100 flex flex-col items-center justify-start">
+            <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 py-4 px-2 sm:px-4 text-neutral-900 dark:text-neutral-100 flex flex-col items-center justify-start transition-colors duration-200">
                 {/* Stage Header Info Banner */}
-                <div className="w-full max-w-[420px] mb-3 flex items-center justify-between px-2 text-xs text-neutral-400">
-                    <div className="flex items-center gap-1.5 font-medium text-emerald-400">
+                <div className="w-full max-w-[420px] mb-3 flex items-center justify-between px-2 text-xs text-neutral-500 dark:text-neutral-400">
+                    <div className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span>Groq Voice Loop • Whisper STT</span>
+                        <span>Addis AI • Groq Voice Loop</span>
                     </div>
-                    <Badge variant="outline" className="border-neutral-800 text-[10px] text-neutral-400 bg-neutral-900/60">
-                        Phone Viewport (390px)
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                        <ThemeToggle />
+                        <Badge variant="outline" className="border-neutral-300 dark:border-neutral-800 text-[10px] text-neutral-600 dark:text-neutral-400 bg-white/80 dark:bg-neutral-900/60">
+                            Phone (390px)
+                        </Badge>
+                    </div>
                 </div>
 
                 {/* Main Phone Viewport Container */}
-                <div className="w-full max-w-[410px] bg-neutral-900 border border-neutral-800 rounded-[2.5rem] shadow-2xl shadow-emerald-950/20 overflow-hidden flex flex-col min-h-[780px] relative">
+                <div className="w-full max-w-[390px] sm:max-w-[400px] bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 rounded-[2.5rem] shadow-2xl shadow-emerald-950/10 dark:shadow-emerald-950/20 overflow-hidden flex flex-col min-h-[780px] relative">
                     {/* Simulated Phone Notch / Speaker Island */}
-                    <div className="w-full pt-3 pb-2 px-6 flex items-center justify-between bg-neutral-900/90 backdrop-blur border-b border-neutral-800/80">
-                        <span className="text-[11px] font-semibold text-neutral-400">9:41 AM</span>
-                        <div className="w-20 h-4 bg-neutral-950 rounded-full flex items-center justify-center">
-                            <div className="w-2 h-2 bg-neutral-800 rounded-full mr-2"></div>
-                            <div className="w-3 h-1 bg-neutral-800 rounded-full"></div>
+                    <div className="w-full pt-3 pb-2 px-6 flex items-center justify-between bg-neutral-100/90 dark:bg-neutral-900/90 backdrop-blur border-b border-neutral-200 dark:border-neutral-800/80">
+                        <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400">9:41 AM</span>
+                        <div className="w-20 h-4 bg-neutral-200 dark:bg-neutral-950 rounded-full flex items-center justify-center">
+                            <div className="w-2 h-2 bg-neutral-400 dark:bg-neutral-800 rounded-full mr-2"></div>
+                            <div className="w-3 h-1 bg-neutral-400 dark:bg-neutral-800 rounded-full"></div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-neutral-400 text-[11px]">
+                        <div className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400 text-[11px]">
                             <span>5G</span>
                             <span>100%</span>
                         </div>
                     </div>
 
                     {/* App Header */}
-                    <div className="px-4 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center justify-between">
+                    <div className="px-4 py-3 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
                         <div>
-                            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                            <h1 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-white flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                 Voice Beneficiary Audit
                             </h1>
-                            <p className="text-[11px] text-neutral-400">Direct 1-on-1 Programme Verification</p>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Direct 1-on-1 Programme Verification</p>
                         </div>
 
                         <Button
                             size="sm"
                             variant="outline"
                             onClick={() => router.visit('/dashboard')}
-                            className="h-7 text-xs border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                            className="h-7 text-xs border-neutral-300 dark:border-neutral-700 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200"
                         >
                             Dashboard →
                         </Button>
                     </div>
 
                     {/* Persona Selector (Stage Quick Switcher) */}
-                    <div className="p-3 bg-neutral-950/60 border-b border-neutral-800">
-                        <div className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400 mb-1.5 flex items-center justify-between">
+                    <div className="p-3 bg-neutral-50 dark:bg-neutral-950/60 border-b border-neutral-200 dark:border-neutral-800">
+                        <div className="text-[10px] uppercase tracking-wider font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 flex items-center justify-between">
                             <span>Select Live Demo Persona:</span>
-                            <span className="text-emerald-400 font-mono">Zero-Guessing Core</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-mono">Zero-Guessing Core</span>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                             <button
@@ -568,15 +572,15 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('selam')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'selam'
-                                        ? 'border-emerald-500/80 bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-500/40'
-                                        : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
+                                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-500/40'
+                                        : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'
                                 }`}
                             >
-                                <div className="text-xs font-bold text-white flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                                     Selam (22)
                                 </div>
-                                <div className="text-[10px] text-neutral-400 truncate">Clean Case (EN)</div>
+                                <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">Clean Case (EN)</div>
                             </button>
 
                             <button
@@ -584,15 +588,15 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('abel')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'abel'
-                                        ? 'border-amber-500/80 bg-amber-950/30 text-amber-300 ring-1 ring-amber-500/40'
-                                        : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
+                                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/40'
+                                        : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'
                                 }`}
                             >
-                                <div className="text-xs font-bold text-white flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                     Abel (19)
                                 </div>
-                                <div className="text-[10px] text-neutral-400 truncate">Ambiguous (AM)</div>
+                                <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">Ambiguous (AM)</div>
                             </button>
 
                             <button
@@ -600,15 +604,15 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('minor')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'minor'
-                                        ? 'border-rose-500/80 bg-rose-950/30 text-rose-300 ring-1 ring-rose-500/40'
-                                        : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
+                                        ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 ring-1 ring-rose-500/40'
+                                        : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'
                                 }`}
                             >
-                                <div className="text-xs font-bold text-white flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                                     Yordanos (14)
                                 </div>
-                                <div className="text-[10px] text-neutral-400 truncate">Under-15 Stop</div>
+                                <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">Under-15 Stop</div>
                             </button>
                         </div>
                     </div>
@@ -616,24 +620,24 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     {/* Scrollable Live Interview Area */}
                     <div className="flex-1 p-3 space-y-3 overflow-y-auto max-h-[500px]">
                         {/* Consent & Ethics Pill */}
-                        <div className="p-2 rounded-lg bg-neutral-950/80 border border-neutral-800 flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5 text-neutral-300">
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-950/80 border border-neutral-200 dark:border-neutral-800 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5 text-neutral-700 dark:text-neutral-300">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                 <span>Verbal Consent Captured</span>
                             </div>
-                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                            <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
                                 CONFIRMED
                             </span>
                         </div>
 
                         {/* Under-15 Hard Stop Alert */}
                         {stoppedHardCase && (
-                            <Alert className="border-rose-500/80 bg-rose-950/50 text-rose-200 animate-in zoom-in-95 duration-200">
-                                <ShieldAlert className="h-4 w-4 text-rose-400" />
-                                <AlertTitle className="text-xs font-bold text-rose-300 uppercase tracking-wide">
+                            <Alert className="border-rose-300 dark:border-rose-500/80 bg-rose-50 dark:bg-rose-950/50 text-rose-900 dark:text-rose-200 animate-in zoom-in-95 duration-200">
+                                <ShieldAlert className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                                <AlertTitle className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wide">
                                     Hard Stop Triggered — Under 15 Minor
                                 </AlertTitle>
-                                <AlertDescription className="text-xs mt-1 text-rose-200/90 leading-relaxed">
+                                <AlertDescription className="text-xs mt-1 text-rose-800/90 dark:text-rose-200/90 leading-relaxed">
                                     {hardCaseDetail ||
                                         'Beneficiary stated age is under the legal minimum of 15. The interview has terminated immediately and cannot count toward programme employment totals.'}
                                 </AlertDescription>
@@ -641,37 +645,37 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                         )}
 
                         {/* Live Streaming Audio / Transcript Card */}
-                        <Card className="bg-neutral-950/90 border-neutral-800">
+                        <Card className="bg-neutral-50 dark:bg-neutral-950/90 border-neutral-200 dark:border-neutral-800 shadow-xs">
                             <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between">
-                                <CardTitle className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Volume2 className="w-3 h-3 text-emerald-400" />
+                                <CardTitle className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Volume2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                     Live Voice Stream & Transcript
                                 </CardTitle>
                                 {isRecording ? (
-                                    <span className="text-[10px] text-rose-400 animate-pulse flex items-center gap-1 font-semibold">
-                                        <Radio className="w-3 h-3 text-rose-400 animate-spin" /> Recording Mic...
+                                    <span className="text-[10px] text-rose-600 dark:text-rose-400 animate-pulse flex items-center gap-1 font-semibold">
+                                        <Radio className="w-3 h-3 animate-spin" /> Recording Mic...
                                     </span>
                                 ) : isTranscribingAudio ? (
-                                    <span className="text-[10px] text-amber-400 animate-pulse flex items-center gap-1">
-                                        <RefreshCcw className="w-3 h-3 animate-spin" /> Groq Whisper STT...
+                                    <span className="text-[10px] text-amber-600 dark:text-amber-400 animate-pulse flex items-center gap-1">
+                                        <RefreshCcw className="w-3 h-3 animate-spin" /> Addis AI / Whisper STT...
                                     </span>
                                 ) : isStreaming ? (
-                                    <span className="text-[10px] text-emerald-400 animate-pulse flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Transcribing...
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 animate-pulse flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Transcribing...
                                     </span>
                                 ) : null}
                             </CardHeader>
                             <CardContent className="p-2.5 pt-1">
-                                <div className="min-h-[75px] bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5 text-xs leading-relaxed font-sans text-neutral-200">
+                                <div className="min-h-[75px] bg-white dark:bg-neutral-900/80 border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 text-xs leading-relaxed font-sans text-neutral-800 dark:text-neutral-200">
                                     {displayedTranscript ? (
                                         <span>
                                             {displayedTranscript}
                                             {(isStreaming || isRecording) && (
-                                                <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-1 animate-pulse" />
+                                                <span className="inline-block w-1.5 h-3 bg-emerald-500 ml-1 animate-pulse" />
                                             )}
                                         </span>
                                     ) : (
-                                        <span className="text-neutral-500 italic">
+                                        <span className="text-neutral-400 dark:text-neutral-500 italic">
                                             Click a persona above or tap the microphone button below to record live voice...
                                         </span>
                                     )}
@@ -683,7 +687,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => speakText(displayedTranscript, selectedPersona === 'abel' ? 'am' : 'en')}
-                                            className="h-6 text-[10px] text-neutral-400 hover:text-white px-2"
+                                            className="h-6 text-[10px] text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white px-2"
                                         >
                                             <Volume2 className="w-3 h-3 mr-1" /> Replay Voice Audio
                                         </Button>
@@ -697,33 +701,33 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
                         {/* Targeted Follow-up Question Callout ("We Don't Guess" Moment) */}
                         {followUps.length > 0 && !stoppedHardCase && (
-                            <div className="p-3 bg-amber-950/40 border border-amber-500/60 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/60 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2 duration-300 shadow-xs">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
-                                        <HelpCircle className="w-4 h-4 text-amber-400" />
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                                        <HelpCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                                         Targeted Follow-up Probe ("We Don't Guess")
                                     </div>
-                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">
+                                    <Badge className="bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40 text-[10px]">
                                         Ambiguity Detected
                                     </Badge>
                                 </div>
 
                                 {followUps[0].ambiguous_quote && (
-                                    <div className="text-[11px] bg-amber-950/80 border border-amber-700/40 rounded p-1.5 text-amber-200/90">
-                                        <span className="text-[10px] text-amber-400/80 font-medium block">
+                                    <div className="text-[11px] bg-amber-100/70 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-700/40 rounded p-1.5 text-amber-900 dark:text-amber-200/90">
+                                        <span className="text-[10px] text-amber-700 dark:text-amber-400/80 font-medium block">
                                             Ambiguous Trigger Evidence Quote:
                                         </span>
                                         "{followUps[0].ambiguous_quote}"
                                     </div>
                                 )}
 
-                                <p className="text-xs text-white font-medium bg-neutral-900/90 p-2 rounded-lg border border-neutral-700 flex items-center justify-between">
+                                <p className="text-xs text-neutral-900 dark:text-white font-medium bg-white dark:bg-neutral-900/90 p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 flex items-center justify-between shadow-xs">
                                     <span>"{followUps[0].question}"</span>
                                     <Button
                                         size="icon"
                                         variant="ghost"
                                         onClick={() => speakText(followUps[0].question, selectedPersona === 'abel' ? 'am' : 'en')}
-                                        className="h-6 w-6 text-amber-400 hover:bg-neutral-800"
+                                        className="h-6 w-6 text-amber-600 dark:text-amber-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                                     >
                                         <Volume2 className="w-3.5 h-3.5" />
                                     </Button>
@@ -739,7 +743,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                 ? 'አቤል ምላሽ: 35 ሰዓት በሳምንት...'
                                                 : 'Enter precise hours or duration...'
                                         }
-                                        className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                                        className="flex-1 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-lg px-2 text-xs text-neutral-900 dark:text-white focus:outline-none focus:border-amber-500"
                                     />
                                     <Button
                                         size="sm"
@@ -754,9 +758,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
                         {/* Live Clause Badges Grid (The 7 Statutory Checks) */}
                         <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 px-1">
+                            <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 px-1">
                                 <span>Statutory Clause Engine (7 Checks)</span>
-                                <span className="text-[10px] text-emerald-400 font-mono">Plain PHP Engine</span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">Plain PHP Engine</span>
                             </div>
 
                             <div className="grid grid-cols-1 gap-1.5">
@@ -770,36 +774,36 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                             key={key}
                                             className={`p-2 rounded-xl border flex items-center justify-between transition-all ${
                                                 status === 'met'
-                                                    ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-200'
+                                                    ? 'border-emerald-200 dark:border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200'
                                                     : status === 'not_met'
-                                                      ? 'border-rose-500/40 bg-rose-950/20 text-rose-200'
+                                                      ? 'border-rose-200 dark:border-rose-500/40 bg-rose-50/50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200'
                                                       : status === 'unclear'
-                                                        ? 'border-amber-500/40 bg-amber-950/20 text-amber-200'
-                                                        : 'border-neutral-800 bg-neutral-950/40 text-neutral-400'
+                                                        ? 'border-amber-200 dark:border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200'
+                                                        : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950/40 text-neutral-500 dark:text-neutral-400'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2">
                                                 <div
                                                     className={`p-1.5 rounded-lg ${
                                                         status === 'met'
-                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                                                             : status === 'not_met'
-                                                              ? 'bg-rose-500/20 text-rose-400'
+                                                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
                                                               : status === 'unclear'
-                                                                ? 'bg-amber-500/20 text-amber-400'
-                                                                : 'bg-neutral-800 text-neutral-400'
+                                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                                                                : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
                                                     }`}
                                                 >
                                                     <Icon className="w-3.5 h-3.5" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                                    <div className="text-xs font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
                                                         {def.short}
-                                                        <span className="text-[9px] text-neutral-400 font-mono font-normal">
+                                                        <span className="text-[9px] text-neutral-500 dark:text-neutral-400 font-mono font-normal">
                                                             {def.sdg}
                                                         </span>
                                                     </div>
-                                                    <div className="text-[10px] text-neutral-400 truncate max-w-[200px]">
+                                                    <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate max-w-[200px]">
                                                         {verdict?.reason || def.label}
                                                     </div>
                                                 </div>
@@ -808,22 +812,22 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                             {/* Status Badge */}
                                             <div>
                                                 {status === 'met' && (
-                                                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px] font-semibold flex items-center gap-1">
-                                                        <CheckCircle2 className="w-3 h-3 text-emerald-400" /> MET
+                                                    <Badge className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40 text-[10px] font-semibold flex items-center gap-1">
+                                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> MET
                                                     </Badge>
                                                 )}
                                                 {status === 'not_met' && (
-                                                    <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/40 text-[10px] font-semibold flex items-center gap-1">
-                                                        <XCircle className="w-3 h-3 text-rose-400" /> NOT MET
+                                                    <Badge className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/40 text-[10px] font-semibold flex items-center gap-1">
+                                                        <XCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> NOT MET
                                                     </Badge>
                                                 )}
                                                 {status === 'unclear' && (
-                                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-semibold flex items-center gap-1">
-                                                        <AlertCircle className="w-3 h-3 text-amber-400" /> UNCLEAR
+                                                    <Badge className="bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40 text-[10px] font-semibold flex items-center gap-1">
+                                                        <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400" /> UNCLEAR
                                                     </Badge>
                                                 )}
                                                 {status === 'pending' && (
-                                                    <Badge variant="outline" className="border-neutral-800 text-neutral-500 text-[10px]">
+                                                    <Badge variant="outline" className="border-neutral-300 dark:border-neutral-800 text-neutral-400 dark:text-neutral-500 text-[10px]">
                                                         WAITING
                                                     </Badge>
                                                 )}
@@ -836,7 +840,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     </div>
 
                     {/* Bottom Action / Microphone Bar */}
-                    <div className="p-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between gap-2">
+                    <div className="p-3 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between gap-2">
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
@@ -845,7 +849,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     className={`h-11 w-11 rounded-full transition-all ${
                                         isRecording
                                             ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse ring-4 ring-rose-900/50'
-                                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950'
+                                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/20'
                                     }`}
                                 >
                                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -861,7 +865,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                         <Button
                             onClick={handleCompleteInterview}
                             disabled={!displayedTranscript || isSubmitting || stoppedHardCase}
-                            className="flex-1 h-11 bg-white hover:bg-neutral-200 text-neutral-950 font-semibold text-xs rounded-xl shadow"
+                            className="flex-1 h-11 bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-neutral-950 font-semibold text-xs rounded-xl shadow"
                         >
                             Save & Aggregate to Dashboard →
                         </Button>
@@ -869,8 +873,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 </div>
 
                 {/* Stage Lens Footer Notice */}
-                <div className="w-full max-w-[420px] mt-3 text-center text-[11px] text-neutral-400">
-                    <span className="font-semibold text-neutral-300">Phase 3 Live Voice:</span> STT $\rightarrow$ Extraction $\rightarrow$ Rule Engine $\rightarrow$ Follow-up Probe $\rightarrow$ TTS.
+                <div className="w-full max-w-[420px] mt-3 text-center text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-300">Phase 3 Live Voice:</span> STT $\rightarrow$ Extraction $\rightarrow$ Rule Engine $\rightarrow$ Follow-up Probe $\rightarrow$ TTS.
                 </div>
             </div>
         </>

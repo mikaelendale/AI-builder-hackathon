@@ -106,22 +106,21 @@ class AudioController extends Controller
         if (env('ADDIS_API_KEY')) {
             try {
                 $audioUrl = $this->addisAi->speak($text, $lang, $voiceId);
-                return response()->json([
-                    'audio_url' => $audioUrl,
-                    'provider' => 'addis-voices-2',
-                ]);
+                if (!empty($audioUrl)) {
+                    return response()->json([
+                        'audio_url' => $audioUrl,
+                        'provider' => 'addis-voices-2',
+                    ]);
+                }
             } catch (\Throwable $e) {
-                return response()->json([
-                    'error' => 'TTS generation failed: ' . $e->getMessage(),
-                    'provider' => 'browser-tts-fallback',
-                ], 500);
+                // Fall back to browser speech synthesis
             }
         }
 
         return response()->json([
             'audio_url' => null,
             'provider' => 'browser-speech-synthesis',
-            'message' => 'Set ADDIS_API_KEY for Addis Voices 2 server generation.',
+            'message' => 'Addis Voices 2 unavailable or key not configured; using browser speech synthesis fallback.',
         ]);
     }
 

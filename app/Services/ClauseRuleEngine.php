@@ -214,4 +214,76 @@ class ClauseRuleEngine
     {
         return $this->result('unclear', $topic, $reason, $clauseKey);
     }
+
+    /**
+     * Resolve the hours_threshold clause using BOTH sources when available, per the
+     * brief's "confirmed either by employer or worker" rule. This does not replace
+     * evaluateHours() — it runs AFTER it, using the worker verdict as one input.
+     */
+    public function reconcile(
+        array $workerVerdict,
+        ?int $employerHoursPerWeek,
+        ?int $employerMonthsEmployed
+    ): array {
+        // Case 1: no employer data at all — worker's verdict stands alone, valid per brief
+        if ($employerHoursPerWeek === null) {
+            return [
+                'final_status' => $workerVerdict['status'] ?? 'unclear',
+                'source' => 'worker_only',
+                'note' => 'No employer confirmation received; worker statement accepted alone per programme rules.',
+            ];
+        }
+
+        $employerMeets = $employerHoursPerWeek >= 20 && ($employerMonthsEmployed ?? 0) >= 6;
+        $employerStatus = $employerMeets ? 'met' : 'not_met';
+        $workerStatus = $workerVerdict['status'] ?? 'unclear';
+
+        // Case 2: worker was unclear, employer gives a clean confirmation — employer
+        // confirmation resolves the clause per the brief's "either" rule
+        if ($workerStatus === 'unclear') {
+            return [
+                'final_status' => $employerStatus,
+                'source' => 'employer_only',
+                'note' => 'Worker account was ambiguous; resolved using employer confirmation.',
+            ];
+        }
+
+        // Case 3: both parties gave a clear answer and they agree
+        if ($workerStatus === $employerStatus) {
+            return [
+                'final_status' => $workerStatus,
+                'source' => 'both_agree',
+                'note' => 'Worker and employer accounts agree.',
+            ];
+        }
+
+        // Case 4: both gave clear answers and they DISAGREE — this is a hard case,
+        // never silently pick one side
+        return [
+            'final_status' => 'unclear',
+            'source' => 'both_disagree',
+            'note' => "Worker reported {$workerStatus}, employer reported {$employerStatus} — contradiction requires a field visit.",
+        ];
+    }
+
+    /**
+     * Evaluate longitudinal continuity across multiple interview checkpoints.
+     */
+    public function evaluateContinuity(\Illuminate\Support\Collection $checkpoints): array
+    {
+        if ($checkpoints->count() < 2) {
+            return ['status' => 'unclear', 'reason' => 'Single interview — continuity not yet established, re-check needed.'];
+        }
+
+        $allConfirmed = $checkpoints->every(fn ($c) => (bool) $c->still_employed_same_role);
+        $totalWeeks = $checkpoints->max('cumulative_weeks_employed') ?? 0;
+
+        if (! $allConfirmed) {
+            return ['status' => 'not_met', 'reason' => 'Employment was not continuous across checkpoints.'];
+        }
+
+        return $totalWeeks >= 26
+            ? ['status' => 'met', 'reason' => "Confirmed continuous employment across {$totalWeeks} weeks."]
+            : ['status' => 'unclear', 'reason' => "Only {$totalWeeks} of 26 required weeks confirmed so far — needs another checkpoint."];
+    }
 }

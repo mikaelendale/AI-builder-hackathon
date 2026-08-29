@@ -392,7 +392,7 @@ class SyntheticInterviewSeeder extends Seeder
             }
 
             // Aggregate into sheet_rows
-            $aggregator->aggregate($interview, [
+            $sheetRow = $aggregator->aggregate($interview, [
                 'job_position' => $data['job_position'],
                 'gender' => $data['gender'],
                 'age_band' => $data['age_band'],
@@ -400,6 +400,87 @@ class SyntheticInterviewSeeder extends Seeder
                 'employer_reported_value' => $data['employer_reported_value'],
                 'worker_reported_value' => $data['worker_reported_value'],
             ]);
+
+            // Feature 1: Pre-seed Bilateral Employer Confirmations for key personas
+            if ($data['persona_type'] === 'selam' || $data['name'] === 'Tigist Alemu') {
+                \App\Models\EmployerConfirmation::create([
+                    'interview_id' => $interview->id,
+                    'confirmation_token' => \Illuminate\Support\Str::random(64),
+                    'status' => 'confirmed',
+                    'employer_reported_hours_per_week' => 40,
+                    'employer_reported_months_employed' => 6,
+                    'employer_note' => 'Confirmed: Full-time permanent contract with statutory pension deductions.',
+                    'responded_at' => now()->subDays(2),
+                    'expires_at' => now()->addDays(2),
+                ]);
+                $sheetRow->update([
+                    'confirmation_source' => 'both_agree',
+                    'confirmed_at' => now()->subDays(2),
+                ]);
+            } elseif ($data['persona_type'] === 'abel') {
+                \App\Models\EmployerConfirmation::create([
+                    'interview_id' => $interview->id,
+                    'confirmation_token' => 'abel-token-8421-ethiopia',
+                    'status' => 'pending',
+                    'employer_reported_hours_per_week' => null,
+                    'employer_reported_months_employed' => null,
+                    'employer_note' => null,
+                    'expires_at' => now()->addHours(72),
+                ]);
+                $sheetRow->update([
+                    'confirmation_source' => 'worker_only',
+                ]);
+            } elseif ($data['name'] === 'Henok Worku' || $data['name'] === 'Tariku Bogale') {
+                \App\Models\EmployerConfirmation::create([
+                    'interview_id' => $interview->id,
+                    'confirmation_token' => \Illuminate\Support\Str::random(64),
+                    'status' => 'disputed',
+                    'employer_reported_hours_per_week' => 45,
+                    'employer_reported_months_employed' => 8,
+                    'employer_note' => 'Employer claims full-time 45h/wk, contradicting worker seasonal statement.',
+                    'responded_at' => now()->subDay(),
+                    'expires_at' => now()->addDays(1),
+                ]);
+                $sheetRow->update([
+                    'confirmation_source' => 'both_disagree',
+                    'confirmed_at' => now()->subDay(),
+                ]);
+            }
+
+            // Feature 3: Pre-seed Longitudinal Continuity Checkpoints for benchmark personas
+            if ($data['persona_type'] === 'selam' || $data['name'] === 'Tigist Alemu' || $data['name'] === 'Biruk Tadesse') {
+                \App\Models\ContinuityCheckpoint::create([
+                    'beneficiary_id' => $beneficiary->id,
+                    'interview_id' => $interview->id,
+                    'checkpoint_date' => now()->subMonths(3)->toDateString(),
+                    'still_employed_same_role' => true,
+                    'cumulative_weeks_employed' => 13,
+                ]);
+
+                \App\Models\ContinuityCheckpoint::create([
+                    'beneficiary_id' => $beneficiary->id,
+                    'interview_id' => $interview->id,
+                    'checkpoint_date' => now()->toDateString(),
+                    'still_employed_same_role' => true,
+                    'cumulative_weeks_employed' => 26,
+                ]);
+            } elseif ($data['name'] === 'Dawit Mengistu') {
+                \App\Models\ContinuityCheckpoint::create([
+                    'beneficiary_id' => $beneficiary->id,
+                    'interview_id' => $interview->id,
+                    'checkpoint_date' => now()->subMonths(2)->toDateString(),
+                    'still_employed_same_role' => true,
+                    'cumulative_weeks_employed' => 8,
+                ]);
+
+                \App\Models\ContinuityCheckpoint::create([
+                    'beneficiary_id' => $beneficiary->id,
+                    'interview_id' => $interview->id,
+                    'checkpoint_date' => now()->toDateString(),
+                    'still_employed_same_role' => false,
+                    'cumulative_weeks_employed' => 8,
+                ]);
+            }
         }
     }
 

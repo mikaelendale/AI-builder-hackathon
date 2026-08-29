@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\HardCaseFlag;
 use App\Models\Interview;
 use App\Models\SheetRow;
+use App\Services\EvidencePackGenerator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,6 +17,8 @@ class DashboardController extends Controller
             'interview.beneficiary',
             'interview.clauseAssessments',
             'interview.hardCaseFlags',
+            'interview.employerConfirmation',
+            'interview.continuityCheckpoints',
         ])
         ->latest()
         ->get();
@@ -40,5 +43,11 @@ class DashboardController extends Controller
                 'employerClaimed' => $employerClaimedGoodJobsCount,
             ],
         ]);
+    }
+
+    public function exportEvidencePack(EvidencePackGenerator $generator)
+    {
+        return response()->json($generator->generate())
+            ->header('Content-Disposition', 'attachment; filename="evidence-pack.json"');
     }
 }

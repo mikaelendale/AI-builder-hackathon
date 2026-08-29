@@ -14,6 +14,7 @@ class Interview extends Model
 
     protected $fillable = [
         'beneficiary_id',
+        'interview_round',
         'status',
         'transcript_raw',
         'consent_given',
@@ -24,6 +25,7 @@ class Interview extends Model
     protected function casts(): array
     {
         return [
+            'interview_round' => 'integer',
             'consent_given' => 'boolean',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
@@ -48,5 +50,15 @@ class Interview extends Model
     public function hardCaseFlags(): HasMany
     {
         return $this->hasMany(HardCaseFlag::class);
+    }
+
+    public function employerConfirmation(): HasOne
+    {
+        return $this->hasOne(EmployerConfirmation::class);
+    }
+
+    public function continuityCheckpoints(): HasMany
+    {
+        return $this->hasMany(ContinuityCheckpoint::class);
     }
 }

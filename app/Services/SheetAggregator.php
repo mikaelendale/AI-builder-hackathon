@@ -8,6 +8,10 @@ use App\Models\SheetRow;
 
 class SheetAggregator
 {
+    public function __construct(
+        protected ClauseRuleEngine $ruleEngine
+    ) {}
+
     public function aggregate(Interview $interview, array $attributes = []): SheetRow
     {
         $assessments = $interview->clauseAssessments;
@@ -26,15 +30,35 @@ class SheetAggregator
 
         $hasDiscrepancy = $employerReported !== $workerReported;
 
-        // Log contradiction to hard_case_flags if employer claims good job but worker reality disagrees
-        if ($hasDiscrepancy) {
+        // Bilateral Confirmation Reconciliation for hours_threshold clause
+        $hoursAssessment = $assessments->firstWhere('clause_key', 'hours_threshold');
+        $employerConf = $interview->employerConfirmation;
+        $employerHours = $attributes['employer_reported_hours_per_week'] 
+            ?? $employerConf?->employer_reported_hours_per_week;
+        $employerMonths = $attributes['employer_reported_months_employed'] 
+            ?? $employerConf?->employer_reported_months_employed;
+
+        $workerHoursVerdict = [
+            'status' => $hoursAssessment?->status ?? 'unclear',
+            'confidence' => (float) ($hoursAssessment?->confidence ?? 0.0),
+        ];
+
+        $reconciliation = $this->ruleEngine->reconcile($workerHoursVerdict, $employerHours, $employerMonths);
+        $confirmationSource = $attributes['confirmation_source'] 
+            ?? $reconciliation['source'] 
+            ?? ($row?->confirmation_source ?? 'unconfirmed');
+
+        // Log contradiction to hard_case_flags if employer claims good job but worker reality disagrees, or bilateral accounts conflict
+        if ($hasDiscrepancy || $confirmationSource === 'both_disagree') {
             HardCaseFlag::firstOrCreate(
                 [
                     'interview_id' => $interview->id,
                     'type' => 'contradiction',
                 ],
                 [
-                    'detail' => "Employer self-reported good job (1) contradicts independent worker assessment ({$workerReported}).",
+                    'detail' => $confirmationSource === 'both_disagree'
+                        ? $reconciliation['note']
+                        : "Employer self-reported good job (1) contradicts independent worker assessment ({$workerReported}).",
                     'resolved_action' => 'Pending Monitoring Officer field investigation.',
                 ]
             );
@@ -51,6 +75,8 @@ class SheetAggregator
                 'employer_reported_value' => $employerReported,
                 'worker_reported_value' => $workerReported,
                 'discrepancy_flag' => $hasDiscrepancy,
+                'confirmation_source' => $confirmationSource,
+                'confirmed_at' => $attributes['confirmed_at'] ?? $row?->confirmed_at ?? ($employerConf ? now() : null),
             ]
         );
     }

@@ -20,6 +20,8 @@ class SheetRow extends Model
         'employer_reported_value',
         'worker_reported_value',
         'discrepancy_flag',
+        'confirmation_source',
+        'confirmed_at',
     ];
 
     protected function casts(): array
@@ -30,6 +32,7 @@ class SheetRow extends Model
             'monthly_salary_etb' => 'integer',
             'employer_reported_value' => 'integer',
             'worker_reported_value' => 'integer',
+            'confirmed_at' => 'datetime',
         ];
     }
 
