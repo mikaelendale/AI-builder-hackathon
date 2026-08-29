@@ -204,8 +204,29 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         streamTimeoutRef.current = interval as unknown as NodeJS.Timeout;
     };
 
-    // Text to Speech for questions & follow-ups
-    const speakText = (text: string, lang = 'en-US') => {
+    // Text to Speech for questions & follow-ups (Addis Voices 2 for Amharic + Browser fallback)
+    const speakText = async (text: string, lang = 'en') => {
+        if (lang === 'am') {
+            try {
+                const res = await fetch('/api/audio/speak', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                    },
+                    body: JSON.stringify({ text, language: 'am', voice_id: 'am-hamen' }),
+                });
+                const data = await res.json();
+                if (data.audio_url) {
+                    const audio = new Audio(data.audio_url);
+                    audio.play();
+                    return;
+                }
+            } catch (e) {
+                // Fallback to browser synthesis
+            }
+        }
+
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
@@ -382,6 +403,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         try {
             const formData = new FormData();
             formData.append('audio', blob, 'voice-interview.webm');
+            formData.append('language', selectedPersona === 'abel' ? 'am' : 'en');
 
             const res = await fetch('/api/audio/transcribe', {
                 method: 'POST',

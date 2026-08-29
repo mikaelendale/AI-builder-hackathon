@@ -8,6 +8,11 @@ read this file in full before writing code. It contains the problem context, the
 we are building for, the full technical plan, the data model, the UI spec, and the
 phased execution plan mapped to the actual hackathon clock.
 
+> **STATUS (Sun 30 Aug, morning):** Phases 0–4 are complete (spine, seed data, voice
+> loop, hard cases, Saturday dry run + fixes all done). Currently in **Phase 5** — final
+> polish, UI, pitch prep. See §8 for what's left. Voice provider is **Addis AI**, not a
+> generic placeholder — see §5 and `IMPLEMENTATION.md` §5 for exact integration.
+
 ---
 
 ## 1. The Problem (why this exists)
@@ -96,8 +101,17 @@ whole pitch. Everything else is in service of that 90 seconds on stage.
 - **Framework:** Laravel (latest), Inertia.js + React, TypeScript
 - **Styling:** Tailwind 4 + shadcn/ui — enterprise, not hackathon-default. See §8 UI spec.
 - **DB:** PostgreSQL
-- **Voice:** Amharic STT/TTS (existing reliable integration) + Whisper (or equivalent)
-  for English
+- **Voice (Amharic + Afaan Oromo):** **Addis AI** —
+  `POST /api/v2/stt` for transcription (60s max audio, 10MB max file, mono 16kHz+
+  recommended, single-speaker only), `POST /api/v1/voice/generations` (Addis Voices 2)
+  for TTS, billed 5 ETB/generated minute — always call the cost estimate endpoint
+  before generating during live demo prep. `am-hamen` is the default Amharic voice.
+  See `IMPLEMENTATION.md` §5 for the exact integration (this is a direct HTTP
+  integration, not one of the Laravel AI SDK's native STT/TTS drivers).
+- **Voice (English):** Whisper (or equivalent) for Selam's persona
+- **Translation (optional, Amharic↔English):** Addis AI `/api/v1/translate` — only
+  needed if the extraction agent should reason over an English-normalized transcript;
+  not required if the extraction agent works directly on Amharic text
 - **LLM:** structured output / tool-calling for **extraction only** — the model never
   decides final clause status, see §6.2
 - **Hosting:** deployed from Day 0, not localhost-only (Laravel Cloud or equivalent) —
@@ -213,52 +227,35 @@ like software a donor-funded programme would actually procure — not a weekend 
 
 ## 8. Phased execution plan (mapped to the actual event clock)
 
-### Phase 0 — Tonight (before Day 1, not counted in the 2 days)
+### ✅ Phase 0 — Tonight (before Day 1) — COMPLETE
 - Scaffold repo: Laravel + Inertia + React + TypeScript + Tailwind 4 + shadcn/ui,
   Postgres migrated empty.
 - Deploy target live and reachable now — confirm before you sleep.
 - Full data model migrations written (§6.1) — do not touch schema during sprints.
 - Both persona scripts (Selam, Abel) written out fully as literal dialogue.
-- Amharic STT/TTS smoke-tested standalone against Abel's actual lines.
+- Addis AI STT/TTS smoke-tested standalone against Abel's actual lines.
 - First commit pushed tonight — see §9.
 
-### Phase 1 — Sprint 1, Sat 10:30–13:00 (2.5h): the spine, text-only
-Goal: prove extraction → rule-engine → verdict works on typed/pasted transcripts.
-Voice is a transport layer bolted on later — build the brain first.
+### ✅ Phase 1 — Sprint 1, Sat 10:30–13:00 (2.5h): the spine, text-only — COMPLETE
+Extraction → rule-engine → verdict pipeline proven on typed/pasted transcripts.
+Both persona scripts confirmed: Selam resolves clean, Abel's hours clause resolves
+`unclear`. Aggregation function producing `sheet_rows` with a seeded employer number.
 
-1. Extraction endpoint: transcript in → structured LLM output (raw signal + evidence
-   quote + confidence) per clause.
-2. Deterministic rule engine in plain PHP applying real legal thresholds.
-3. Confidence/ambiguity rule forcing `unclear` when warranted.
-4. Run both persona scripts as raw text through the pipeline; confirm Selam resolves
-   clean, Abel's hours clause resolves `unclear`.
-5. Aggregation function: N interviews → sheet_rows, with a manually seeded plausible
-   employer number for comparison.
+### ✅ Phase 2 — Lunch, Sat 13:00–13:45: seed data — COMPLETE
+~20 synthetic transcripts generated and batch-run through the pipeline, populating
+`sheet_rows` ahead of UI work.
 
-**Checkpoint before lunch:** text in → correct clause verdicts out → aggregate row
-appears. Do not proceed until this works.
+### ✅ Phase 3 — Sprint 2, Sat 13:45–15:30 (1.75h): voice layer + hard cases — COMPLETE
+Addis AI voice loop wired (STT → extraction → follow-up templated question via TTS →
+re-extract), hard-case detection tested (under-15 stop, contradiction flag, refusal
+handling), both live personas bound to real mic input on the phone-sized view.
 
-### Phase 2 — Lunch, Sat 13:00–13:45: seed data (working lunch, not a break)
-- Generate ~20 synthetic transcripts via LLM: varied job types, some clean, some
-  flagged, one under-15 case, one refusal, one employer/worker contradiction.
-- Batch-run through the Phase 1 pipeline to populate `sheet_rows` ahead of any UI work.
+### ✅ Phase 4 — Deep work, Sat 16:00–17:00: dry-run fixes — COMPLETE
+Saturday mid-checkpoint dry run completed; issues found in that run were fixed here.
 
-### Phase 3 — Sprint 2, Sat 13:45–15:30 (1.75h): voice layer + hard cases
-1. Voice loop: STT → extraction endpoint → if `unclear`/low-confidence, one templated
-   follow-up per clause type → re-extract → TTS response.
-2. Hard-case detection wired and tested: under-15 stop, contradiction flag, refusal
-   handling.
-3. Bind both live personas to real mic input on the actual phone-sized browser view.
+### 🔶 Phase 5 — Sunday final sprint, 09:30–13:00: demo polish — IN PROGRESS
 
-**Checkpoint 15:30 mid-check (non-negotiable):** full dry run, live voice, on the
-actual device and actual wifi you'll demo with. This is where mic permissions, latency,
-and mobile TTS playback bugs surface — find them now, not on stage.
-
-### Phase 4 — Deep work, Sat 16:00–17:00: fix only what broke in the dry run
-No new features. If the dry run was clean, spend this hour hardening the hard-case
-handling and the follow-up-question UX — both cheap, both highly visible to judges.
-
-### Phase 5 — Sunday final sprint, 09:30–13:00: demo polish
+**This is the current phase — everything below is what's left.**
 1. Dashboard visual polish per §7 Screen B.
 2. Live transcript streaming effect finalized per §7 Screen A.
 3. SDG tags wired in.
@@ -267,6 +264,21 @@ handling and the follow-up-question UX — both cheap, both highly visible to ju
    close on the under-15 hard-stop demo.
 5. Fallback: a pre-recorded interview video ready to play instantly if live mic fails
    on stage — never let the demo die on silence.
+
+**Remaining checklist for Phase 5 (work top to bottom, stop early if time runs out —
+items are ordered by judge-visible impact):**
+
+- [ ] Dashboard (Screen B) visual pass: discrepancy row highlighting, confidence badges,
+  SDG chips, summary strip numbers — §7 Screen B
+- [ ] Live interview (Screen A) visual pass: streaming transcript reveal, live clause
+  badges, ambiguous-quote-next-to-follow-up UI — §7 Screen A
+- [ ] SDG tags (8.5, 8.6, 8.8, 5.5, 1.2) wired into `clause_assessments.sdg_tags`
+- [ ] Set the real ETB minimum wage figure in `ClauseRuleEngine` (was a placeholder —
+  see `IMPLEMENTATION.md` §3) — or keep `min_wage` honestly `unclear` and say so on stage
+- [ ] Record the fallback video (Abel or Selam, full interview, in case live mic fails)
+- [ ] Full pitch rehearsal, timed to 5 minutes, at least twice
+- [ ] `README.md` written per §9 below, if not already done
+- [ ] Final deploy + smoke test on the actual pitch device/wifi, not just localhost
 
 ---
 

@@ -5,6 +5,10 @@ This is not a description of what to build — it's the code. Follow it top to b
 in order, and you have a working app. Each section maps to a phase in
 `BUILD_CONTEXT.md` §8. Paste directly into the Laravel app.
 
+> **STATUS (Sun 30 Aug, morning):** §1–§4 and §6–§10 are implemented (Phases 0–4 done).
+> §5 (Voice I/O) is finalized using **Addis AI**, not a generic SDK driver. Remaining
+> work is Phase 5 polish — see `BUILD_CONTEXT.md` §8 for the current checklist.
+
 ---
 
 ## 0. Install & configure
@@ -403,26 +407,120 @@ state (§6.3 of `BUILD_CONTEXT.md`).
 
 ---
 
-## 5. Voice I/O (SDK-native, use directly)
+## 5. Voice I/O — Addis AI (Amharic + Afaan Oromo), direct HTTP integration
 
-```php
-use Laravel\Ai\Audio;
-use Laravel\Ai\Transcription;
+Addis AI is **not** one of the Laravel AI SDK's native STT/TTS drivers, so this is a
+plain HTTP client wrapped in a small service class. The extraction/rule-engine core in
+§2–§3 doesn't care where the transcript text came from, so this plugs in cleanly.
 
-// TTS — ask a question aloud
-$audio = Audio::of($question)->generate();
-$path = $audio->storePublicly();
-
-// STT — transcribe the beneficiary's spoken answer
-$transcript = Transcription::fromUpload($request->file('audio'))->generate();
-$text = (string) $transcript;
+`.env`:
+```ini
+ADDIS_API_KEY=sk_...
+ADDIS_BASE_URL=https://api.addisassistant.com
+ADDIS_DEFAULT_VOICE_ID=am-hamen
 ```
 
-If your Amharic STT/TTS provider isn't natively supported by the SDK's drivers
-(OpenAI/ElevenLabs/Gemini for TTS; +Groq/Mistral for STT — see the provider table),
-call it directly outside the SDK for the audio step and hand the resulting transcript
-text into `ClauseExtractionAgent` exactly as above — the extraction/rule-engine core
-doesn't care where the transcript text came from.
+```php
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+
+class AddisAiVoice
+{
+    private string $baseUrl;
+    private string $apiKey;
+
+    public function __construct()
+    {
+        $this->baseUrl = config('services.addis.base_url', env('ADDIS_BASE_URL'));
+        $this->apiKey = config('services.addis.api_key', env('ADDIS_API_KEY'));
+    }
+
+    /**
+     * Transcribe a short (<=60s, <=10MB) audio file. Amharic = 'am', Afaan Oromo = 'om'.
+     */
+    public function transcribe(string $audioPath, string $languageCode = 'am'): string
+    {
+        $response = Http::withHeaders(['x-api-key' => $this->apiKey])
+            ->attach('audio', file_get_contents($audioPath), basename($audioPath))
+            ->post("{$this->baseUrl}/api/v2/stt", [
+                'request_data' => json_encode(['language_code' => $languageCode]),
+            ]);
+
+        $response->throw(); // fail loud during a hackathon — don't silently swallow STT errors
+
+        return $response->json('data.transcription');
+    }
+
+    /**
+     * Generate a TTS clip (Addis Voices 2) and return the durable, playable audio URL.
+     * Billed 5 ETB/generated minute — during rehearsal, call estimate() first if you're
+     * watching spend; during the live demo just generate, latency matters more than cost.
+     */
+    public function speak(string $text, string $languageCode = 'am', ?string $voiceId = null): string
+    {
+        $response = Http::withHeaders([
+            'x-api-key' => $this->apiKey,
+            'content-type' => 'application/json',
+        ])->post("{$this->baseUrl}/api/v1/voice/generations", [
+            'text' => $text,
+            'voice_id' => $voiceId ?? config('services.addis.default_voice_id', 'am-hamen'),
+            'language' => $languageCode,
+            'output_format' => 'mp3_44100',
+            'client_request_id' => (string) \Illuminate\Support\Str::uuid(),
+        ]);
+
+        $response->throw();
+
+        return $response->json('data.audio_url'); // signed URL — don't store it permanently, store the clip ID instead if you need to replay later
+    }
+
+    public function estimate(string $text, string $languageCode = 'am', ?string $voiceId = null): array
+    {
+        $response = Http::withHeaders([
+            'x-api-key' => $this->apiKey,
+            'content-type' => 'application/json',
+        ])->post("{$this->baseUrl}/api/v1/voice/estimate", [
+            'text' => $text,
+            'voice_id' => $voiceId ?? config('services.addis.default_voice_id', 'am-hamen'),
+            'language' => $languageCode,
+            'output_format' => 'mp3_44100',
+        ]);
+
+        $response->throw();
+
+        return $response->json('data') ?? $response->json();
+    }
+}
+```
+
+**Known constraints to respect in the frontend recording UI (Screen A):**
+- Max audio duration per STT call: **60 seconds** — chunk longer beneficiary answers, or
+  prompt shorter turns in the interview script.
+- Max file size: **10MB**.
+- **Single-speaker only** — never let two voices overlap in one clip (not a concern for
+  a 1-on-1 interview demo, but worth stating in case a teammate jumps in during rehearsal).
+- Record mono, 16kHz+, speaker 10–30cm from mic, quiet room — the venue itself may be
+  noisy; test in the actual pitch room, not just the hotel corridor.
+- Addis Voices 2 TTS **does not stream partial audio** — the whole clip is generated
+  then returned; budget for that latency in the live demo (don't expect word-by-word
+  TTS playback like the Realtime API would give you).
+
+**Alternative — Addis AI Realtime API (WebSocket, <300ms, bidirectional):**
+If Phase 5 time allows and the current turn-based STT→extract→TTS loop feels too slow
+on stage, Addis AI also exposes a low-latency WebSocket Realtime API
+(`wss://relay.addisassistant.com/ws?apiKey=...`) that streams PCM16 audio both ways and
+supports natural interruption. This is a bigger integration change (raw WebSocket + a
+Float32→Int16 PCM conversion in the browser) and is **not** in the current build — only
+reach for it if the turn-based loop is visibly too slow in rehearsal and there's still
+runway before the pitch. Don't swap architectures this late unless the current one is
+demonstrably failing.
+
+`AddisAiVoice` replaces the SDK's `Laravel\Ai\Audio` / `Laravel\Ai\Transcription`
+classes for this project — those remain fine for English (Whisper or similar), but all
+Amharic/Afaan Oromo voice I/O goes through this service.
 
 ---
 
@@ -739,17 +837,19 @@ test('under-15 hard case stops the interview', function () {
 
 ---
 
-## 11. What's still genuinely open (be honest about this, don't hide it)
+## 11. What's still genuinely open (Phase 5 remaining — be honest, don't hide it)
 
 - **The real ETB minimum wage figure** — §3 flags this with a `TODO`. Find it before
-  the demo or keep the clause honestly `unclear`.
-- **The two full persona dialogue scripts** — not yet written, needed for both the
-  live demo and the synthetic seed variety. Ask me to draft these next; they're the
-  literal thing you'll speak into STT tonight.
-- **Amharic STT/TTS wiring specifics** — this doc assumes you already have a working
-  integration; if it's not one of the SDK's native drivers, you'll glue it in as
-  described in §5, outside the `Laravel\Ai\Audio`/`Transcription` classes.
-- **shadcn/ui component choices for the two screens** — §8 gives structure, not final
-  visual design; that's Phase 5 polish work per `BUILD_CONTEXT.md`.
-- **Consent capture UX/storage** — `consent_given` exists as a column, but the actual
-  UI flow and what "revocable, deletable" means in a 2-day scope isn't specced yet.
+  the demo or keep the clause honestly `unclear` and say so on stage.
+- **shadcn/ui visual polish for the two screens** — §8 gives structure, not final
+  visual design; this is the main remaining Phase 5 work per `BUILD_CONTEXT.md` §8.
+- **Consent capture UX/storage** — `consent_given` exists as a column; confirm the
+  actual UI flow shows it clearly during the live demo (§7 Screen A in
+  `BUILD_CONTEXT.md` calls this out as visible-and-explicit, not implied).
+- **Fallback demo video** — record a full backup interview run in case live mic/Addis
+  AI latency causes issues on stage.
+- **Pitch script timing** — rehearse to 5 minutes, at least twice, per the checklist
+  in `BUILD_CONTEXT.md` §8.
+
+Resolved since the last version of this doc: Amharic/Afaan Oromo STT/TTS is now fully
+specified against Addis AI in §5 (no longer an open item); Phases 0–4 are complete.

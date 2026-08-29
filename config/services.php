@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'addis' => [
+        'api_key' => env('ADDIS_API_KEY'),
+        'base_url' => env('ADDIS_BASE_URL', 'https://api.addisassistant.com'),
+        'default_voice_id' => env('ADDIS_DEFAULT_VOICE_ID', 'am-hamen'),
+    ],
+
 ];

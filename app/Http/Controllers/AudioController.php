@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AddisAiVoice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -9,8 +10,12 @@ use Laravel\Ai\Transcription;
 
 class AudioController extends Controller
 {
+    public function __construct(
+        private AddisAiVoice $addisAi,
+    ) {}
+
     /**
-     * Transcribe incoming audio (English / Amharic) via Groq Whisper API
+     * Transcribe incoming audio (Amharic / Afaan Oromo via Addis AI, or English via Groq Whisper)
      */
     public function transcribe(Request $request): JsonResponse
     {
@@ -19,9 +24,26 @@ class AudioController extends Controller
         ]);
 
         $file = $request->file('audio');
-        $groqKey = config('ai.providers.groq.key') ?? env('GROQ_API_KEY');
+        $lang = $request->input('language', 'am');
 
-        // 1. Try direct Groq Whisper API if key is present
+        // 1. If Amharic or Afaan Oromo, try Addis AI first
+        if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
+            try {
+                $transcriptText = $this->addisAi->transcribe($file->getRealPath(), $lang);
+                if (!empty($transcriptText)) {
+                    return response()->json([
+                        'text' => trim($transcriptText),
+                        'provider' => 'addis-ai-stt',
+                        'language' => $lang,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // Fall through to Groq Whisper or fallback
+            }
+        }
+
+        // 2. Try direct Groq Whisper API (whisper-large-v3-turbo)
+        $groqKey = config('ai.providers.groq.key') ?? env('GROQ_API_KEY');
         if ($groqKey) {
             try {
                 $response = Http::withToken($groqKey)
@@ -41,27 +63,65 @@ class AudioController extends Controller
                     return response()->json([
                         'text' => trim($text),
                         'provider' => 'groq-whisper-turbo',
+                        'language' => $lang,
                     ]);
                 }
             } catch (\Throwable $e) {
-                // Fallback to Laravel AI Transcription or local heuristic
+                // Fall through
             }
         }
 
-        // 2. Try Laravel AI Transcription driver
+        // 3. Try Laravel AI SDK Transcription
         try {
             $transcript = Transcription::fromUpload($file)->generate();
             return response()->json([
                 'text' => (string) $transcript,
                 'provider' => 'laravel-ai-transcription',
+                'language' => $lang,
             ]);
         } catch (\Throwable $e) {
-            // Local fallback for offline testing
             return response()->json([
                 'text' => 'Recorded voice transcript received.',
                 'provider' => 'local-fallback',
-                'note' => 'Audio received. Set GROQ_API_KEY in .env for live cloud Whisper transcription.',
+                'language' => $lang,
             ]);
         }
+    }
+
+    /**
+     * Synthesize audio via Addis AI Voices 2 (Amharic / Afaan Oromo)
+     */
+    public function speak(Request $request): JsonResponse
+    {
+        $request->validate([
+            'text' => 'required|string',
+            'language' => 'nullable|string',
+            'voice_id' => 'nullable|string',
+        ]);
+
+        $text = $request->input('text');
+        $lang = $request->input('language', 'am');
+        $voiceId = $request->input('voice_id');
+
+        if (env('ADDIS_API_KEY')) {
+            try {
+                $audioUrl = $this->addisAi->speak($text, $lang, $voiceId);
+                return response()->json([
+                    'audio_url' => $audioUrl,
+                    'provider' => 'addis-voices-2',
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'error' => 'TTS generation failed: ' . $e->getMessage(),
+                    'provider' => 'browser-tts-fallback',
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'audio_url' => null,
+            'provider' => 'browser-speech-synthesis',
+            'message' => 'Set ADDIS_API_KEY for Addis Voices 2 server generation.',
+        ]);
     }
 }
