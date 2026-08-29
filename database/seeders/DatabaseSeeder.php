@@ -15,11 +15,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        User::firstOrCreate(
+            ['email' => 'hiwot@sequa-ethiopia.org'],
+            [
+                'name' => 'Hiwot (Monitoring Officer)',
+                'password' => bcrypt('password'),
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            SyntheticInterviewSeeder::class,
         ]);
     }
 }
