@@ -15,6 +15,8 @@ class ClauseAssessment extends Model
         'clause_key',
         'status',
         'confidence',
+        'verifier_flag',
+        'verifier_note',
         'evidence_quote',
         'raw_llm_output',
         'sdg_tags',
@@ -24,6 +26,7 @@ class ClauseAssessment extends Model
     {
         return [
             'confidence' => 'float',
+            'verifier_flag' => 'boolean',
             'raw_llm_output' => 'array',
             'sdg_tags' => 'array',
         ];

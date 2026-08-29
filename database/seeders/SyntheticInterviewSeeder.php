@@ -371,13 +371,41 @@ class SyntheticInterviewSeeder extends Seeder
             $verdicts = $ruleEngine->evaluate($interview, $extracted);
 
             foreach ($verdicts as $clauseKey => $verdict) {
+                $topicKey = match ($clauseKey) {
+                    'age_15_plus' => 'age',
+                    'hours_threshold' => 'hours_and_duration',
+                    'min_wage' => 'wage',
+                    'no_child_labor' => 'child_labor',
+                    'no_forced_labor' => 'forced_labor',
+                    'no_discrimination' => 'discrimination',
+                    'freedom_of_association' => 'freedom_of_association',
+                    default => $clauseKey,
+                };
+
+                // Verifier-Critic reflection status
+                $verifierFlag = false;
+                $verifierNote = null;
+
+                if ($data['name'] === 'Henok Worku' && $clauseKey === 'hours_threshold') {
+                    $verifierFlag = true;
+                    $verifierNote = 'Verifier Critic: Extracted quote "harvest season only" is relative and unanchored; requires follow-up probe.';
+                } elseif ($data['name'] === 'Abel Kebede' && $clauseKey === 'hours_threshold') {
+                    $verifierFlag = true;
+                    $verifierNote = 'Verifier Critic: Extracted duration "ከክረምቱ በኋላ" (after the rains) is ambiguous without specific weekly hour log.';
+                } elseif ($data['name'] === 'Tariku Bogale' && $clauseKey === 'hours_threshold') {
+                    $verifierFlag = true;
+                    $verifierNote = 'Verifier Critic: Discrepant hours statement flagged during reflection check against employer payroll report.';
+                }
+
                 ClauseAssessment::create([
                     'interview_id' => $interview->id,
                     'clause_key' => $clauseKey,
-                    'status' => $verdict['status'],
-                    'confidence' => $verdict['confidence'],
+                    'status' => $verifierFlag ? 'unclear' : $verdict['status'],
+                    'confidence' => $verifierFlag ? 0.0 : $verdict['confidence'],
+                    'verifier_flag' => $verifierFlag,
+                    'verifier_note' => $verifierNote,
                     'evidence_quote' => $verdict['evidence_quote'],
-                    'raw_llm_output' => $extracted[$clauseKey] ?? null,
+                    'raw_llm_output' => $extracted[$topicKey] ?? null,
                     'sdg_tags' => $verdict['sdg_tags'] ?? [],
                 ]);
             }

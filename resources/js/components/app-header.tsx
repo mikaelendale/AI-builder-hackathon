@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import { BookOpen, LayoutGrid, Menu, Mic, PhoneCall, Search } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
@@ -41,21 +41,26 @@ type Props = {
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Monitoring Sheet',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Live Voice Audit',
+        href: '/interview',
+        icon: Mic,
     },
 ];
 
 const rightNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
+        title: 'Feature-Phone IVR',
+        href: '/demo/feature-phone',
+        icon: PhoneCall,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
+        title: 'Evidence Pack',
+        href: '/dashboard/evidence-pack',
         icon: BookOpen,
     },
 ];

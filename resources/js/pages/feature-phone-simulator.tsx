@@ -506,14 +506,14 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                 </div>
 
                 {/* Quick Simulation Shortcuts Bar */}
-                <div className="w-full max-w-sm mb-3 flex items-center justify-between gap-1.5 p-2 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-sm text-xs">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Demo:</span>
+                <div className="w-full max-w-sm mb-3 flex items-center justify-between gap-1.5 p-2 rounded-xl bg-card border border-border shadow-xs text-xs">
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Demo:</span>
                     <button
                         type="button"
                         onClick={handleSimulateAbelVoice}
-                        className="flex-1 py-1 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-600/40 font-bold text-[10px] truncate hover:bg-emerald-100"
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-medium text-[11px] truncate hover:bg-emerald-500/20 transition-colors"
                     >
-                        <Sparkles className="w-3 h-3 inline mr-1" /> Abel Spoken Voice (AM)
+                        <Volume2 className="w-3 h-3 inline mr-1" /> Abel Spoken Voice (AM)
                     </button>
                     <button
                         type="button"
@@ -522,7 +522,7 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                             else if (!isListening) startMicListening();
                             else stopAndSendTurn();
                         }}
-                        className="py-1 px-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-300/60 dark:border-blue-600/40 font-bold text-[10px] hover:bg-blue-100 flex items-center gap-1"
+                        className="py-1.5 px-2.5 rounded-lg bg-muted text-foreground border border-border font-medium text-[11px] hover:bg-muted/80 flex items-center gap-1 transition-colors"
                     >
                         <Mic className="w-3 h-3" /> {isListening ? 'Send Voice' : 'Your Mic'}
                     </button>
@@ -646,24 +646,38 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                 </div>
 
                 {/* Statutory Clause Assessment Status from Database */}
-                <div className="w-full max-w-sm mt-3 p-3 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-sm space-y-2">
-                    <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+                <div className="w-full max-w-sm mt-3 p-3 rounded-2xl bg-card border border-border shadow-xs space-y-2">
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                         <span>IVR Statutory Assessment</span>
-                        <span className="text-emerald-600 font-mono">Abel Kebede</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono">Abel Kebede</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1.5 text-xs">
-                        <div className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 flex items-center justify-between">
-                            <span className="text-[10px] font-semibold">Age 15+ Threshold:</span>
-                            <Badge className="text-[8px] uppercase font-bold py-0 h-4">
+                        <div className="p-2 rounded-lg border border-border bg-muted/30 flex items-center justify-between">
+                            <span className="text-[10px] font-medium text-foreground">Age 15+ :</span>
+                            <Badge
+                                className={`text-[8px] font-mono uppercase font-bold py-0 h-4 ${
+                                    verdicts.age_15_plus === 'met'
+                                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                                        : verdicts.age_15_plus === 'not_met'
+                                          ? 'bg-destructive/10 text-destructive border border-destructive/20'
+                                          : 'bg-muted text-muted-foreground border border-border'
+                                }`}
+                            >
                                 {verdicts.age_15_plus}
                             </Badge>
                         </div>
-                        <div className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 flex items-center justify-between">
-                            <span className="text-[10px] font-semibold">20h/wk (26 wks):</span>
+                        <div className="p-2 rounded-lg border border-border bg-muted/30 flex items-center justify-between">
+                            <span className="text-[10px] font-medium text-foreground">20h/wk (26 wks):</span>
                             <Badge
-                                className={`text-[8px] uppercase font-bold py-0 h-4 ${
-                                    verdicts.hours_threshold === 'unclear' ? 'bg-amber-500 text-white' : ''
+                                className={`text-[8px] font-mono uppercase font-bold py-0 h-4 ${
+                                    verdicts.hours_threshold === 'met'
+                                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                                        : verdicts.hours_threshold === 'unclear'
+                                          ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20'
+                                          : verdicts.hours_threshold === 'not_met'
+                                            ? 'bg-destructive/10 text-destructive border border-destructive/20'
+                                            : 'bg-muted text-muted-foreground border border-border'
                                 }`}
                             >
                                 {verdicts.hours_threshold}

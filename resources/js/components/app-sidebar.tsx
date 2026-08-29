@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid, Mic } from 'lucide-react';
+import { BookOpen, LayoutGrid, Mic, PhoneCall } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -23,7 +23,7 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'Live Phone Interview',
+        title: 'Live Voice Audit',
         href: '/interview',
         icon: Mic,
     },
@@ -31,13 +31,13 @@ const mainNavItems: NavItem[] = [
 
 const footerNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
+        title: 'Feature-Phone IVR',
+        href: '/demo/feature-phone',
+        icon: PhoneCall,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
+        title: 'Evidence Pack',
+        href: '/dashboard/evidence-pack',
         icon: BookOpen,
     },
 ];

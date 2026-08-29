@@ -45,6 +45,8 @@ interface Beneficiary {
 interface ClauseVerdict {
     status: 'met' | 'not_met' | 'unclear' | 'pending';
     confidence: number;
+    verifier_flag?: boolean | null;
+    verifier_note?: string | null;
     evidence_quote?: string | null;
     reason?: string;
     sdg_tags?: string[];
@@ -77,6 +79,8 @@ interface InterviewProps {
             clause_key: string;
             status: 'met' | 'not_met' | 'unclear';
             confidence: number;
+            verifier_flag?: boolean | null;
+            verifier_note?: string | null;
             evidence_quote: string | null;
             sdg_tags: string[];
         }>;
@@ -962,19 +966,32 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                         </span>
                                                     )}
                                                 </div>
-                                                <span
-                                                    className={`text-[9px] font-mono uppercase font-semibold py-0.5 px-1.5 rounded-full border ${
-                                                        status === 'met'
-                                                            ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-                                                            : status === 'not_met'
-                                                              ? 'border-destructive/30 text-destructive bg-destructive/10'
-                                                              : status === 'unclear'
-                                                                ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
-                                                                : 'border-border text-muted-foreground bg-muted'
-                                                    }`}
-                                                >
-                                                    {status}
-                                                </span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {verdict?.verifier_flag !== undefined && verdict?.verifier_flag !== null && (
+                                                        verdict.verifier_flag === false ? (
+                                                            <span title="Verifier-Critic Confirmed" className="text-emerald-600 dark:text-emerald-400">
+                                                                <ShieldCheck className="w-3 h-3" />
+                                                            </span>
+                                                        ) : (
+                                                            <span title={`Flagged by Critic: ${verdict.verifier_note || 'Unfaithful signal'}`} className="text-amber-500">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                            </span>
+                                                        )
+                                                    )}
+                                                    <span
+                                                        className={`text-[9px] font-mono uppercase font-semibold py-0.5 px-1.5 rounded-full border ${
+                                                            status === 'met'
+                                                                ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                                                                : status === 'not_met'
+                                                                  ? 'border-destructive/30 text-destructive bg-destructive/10'
+                                                                  : status === 'unclear'
+                                                                    ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+                                                                    : 'border-border text-muted-foreground bg-muted'
+                                                        }`}
+                                                    >
+                                                        {status}
+                                                    </span>
+                                                </div>
                                             </div>
                                         );
                                     })}

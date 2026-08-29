@@ -3,6 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Ai\Agents\ClauseExtractionAgent;
+use App\Ai\Agents\EmploymentFactsAgent;
+use App\Ai\Agents\ExtractionVerifierAgent;
+use App\Ai\Agents\InterviewSupervisorAgent;
+use App\Ai\Agents\RightsProtectionsAgent;
 use App\Models\Beneficiary;
 use App\Models\ClauseAssessment;
 use App\Models\HardCaseFlag;
@@ -10,6 +14,7 @@ use App\Models\Interview;
 use App\Services\ClauseRuleEngine;
 use App\Services\FollowUpQuestions;
 use App\Services\SheetAggregator;
+use App\Services\SubAgentResultMerger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -21,6 +26,7 @@ class InterviewController extends Controller
         private ClauseRuleEngine $ruleEngine,
         private FollowUpQuestions $followUps,
         private SheetAggregator $aggregator,
+        private SubAgentResultMerger $merger,
     ) {}
 
     public function create(): Response
@@ -127,6 +133,7 @@ class InterviewController extends Controller
         ]);
 
         $extracted = $this->extractSignals($updatedTranscript);
+        $this->verifySignals($updatedTranscript, $extracted);
         $verdicts = $this->ruleEngine->evaluate($interview, $extracted);
 
         // Hard case: under-15 — stop immediately, flag, never count
@@ -151,8 +158,12 @@ class InterviewController extends Controller
             ]);
         }
 
-        // Store clause assessments
+        // Store clause assessments with Verifier-Critic flag and notes
         foreach ($verdicts as $clauseKey => $verdict) {
+            $topicKey = $this->mapClauseToTopicKey($clauseKey);
+            $verifierFlag = $extracted[$topicKey]['verifier_flag'] ?? false;
+            $verifierNote = $extracted[$topicKey]['verifier_note'] ?? null;
+
             ClauseAssessment::updateOrCreate(
                 [
                     'interview_id' => $interview->id,
@@ -161,11 +172,16 @@ class InterviewController extends Controller
                 [
                     'status' => $verdict['status'],
                     'confidence' => $verdict['confidence'],
+                    'verifier_flag' => $verifierFlag,
+                    'verifier_note' => $verifierNote,
                     'evidence_quote' => $verdict['evidence_quote'] ?? null,
-                    'raw_llm_output' => $extracted[$clauseKey] ?? null,
+                    'raw_llm_output' => $extracted[$topicKey] ?? null,
                     'sdg_tags' => $verdict['sdg_tags'] ?? [],
                 ]
             );
+
+            $verdicts[$clauseKey]['verifier_flag'] = $verifierFlag;
+            $verdicts[$clauseKey]['verifier_note'] = $verifierNote;
         }
 
         $lang = $interview->beneficiary?->language ?? 'en';
@@ -196,7 +212,7 @@ class InterviewController extends Controller
     public function converse(Request $request, Interview $interview): JsonResponse
     {
         $lang = $request->input('language', $interview->beneficiary?->language ?? 'en');
-        $userText = trim($request->input('transcript', ''));
+        $userText = trim($request->input('transcript', $request->input('user_text', '')));
 
         // Check if browser-side live speech transcript was provided
         if (empty($userText) && $request->filled('interim_text')) {
@@ -260,6 +276,7 @@ class InterviewController extends Controller
 
         // 3. Extract signals & calculate deterministic rule engine verdicts
         $extracted = $this->extractSignals($updatedTranscript);
+        $this->verifySignals($updatedTranscript, $extracted);
         $verdicts = $this->ruleEngine->evaluate($interview, $extracted);
 
         \Illuminate\Support\Facades\Log::info("[sequa-converse] Interview #{$interview->id} [lang={$lang}] Input: {$userText}");
@@ -295,8 +312,12 @@ class InterviewController extends Controller
             ]);
         }
 
-        // Store clause assessments
+        // Store clause assessments with Verifier-Critic flag and notes
         foreach ($verdicts as $clauseKey => $verdict) {
+            $topicKey = $this->mapClauseToTopicKey($clauseKey);
+            $verifierFlag = $extracted[$topicKey]['verifier_flag'] ?? false;
+            $verifierNote = $extracted[$topicKey]['verifier_note'] ?? null;
+
             ClauseAssessment::updateOrCreate(
                 [
                     'interview_id' => $interview->id,
@@ -305,11 +326,16 @@ class InterviewController extends Controller
                 [
                     'status' => $verdict['status'],
                     'confidence' => $verdict['confidence'],
+                    'verifier_flag' => $verifierFlag,
+                    'verifier_note' => $verifierNote,
                     'evidence_quote' => $verdict['evidence_quote'] ?? null,
-                    'raw_llm_output' => $extracted[$clauseKey] ?? null,
+                    'raw_llm_output' => $extracted[$topicKey] ?? null,
                     'sdg_tags' => $verdict['sdg_tags'] ?? [],
                 ]
             );
+
+            $verdicts[$clauseKey]['verifier_flag'] = $verifierFlag;
+            $verdicts[$clauseKey]['verifier_note'] = $verifierNote;
         }
 
         // 5. Check if any clause is unclear and needs a targeted follow-up probe
@@ -417,41 +443,127 @@ class InterviewController extends Controller
     }
 
     /**
-     * Fallback structured extractor when AI key is not set or during local testing
+     * Map statutory clause keys to extracted topic keys
+     */
+    private function mapClauseToTopicKey(string $clauseKey): string
+    {
+        return match ($clauseKey) {
+            'age_15_plus' => 'age',
+            'hours_threshold' => 'hours_and_duration',
+            'min_wage' => 'wage',
+            'no_child_labor' => 'child_labor',
+            'no_forced_labor' => 'forced_labor',
+            'no_discrimination' => 'discrimination',
+            'freedom_of_association' => 'freedom_of_association',
+            default => $clauseKey,
+        };
+    }
+
+    /**
+     * Feature 1: Supervisor-Worker Fan-Out extraction
+     * Coordinates EmploymentFactsAgent and RightsProtectionsAgent via InterviewSupervisorAgent
      */
     private function extractSignals(string $transcript): array
     {
         try {
             $promptText = "Interview transcript:\n\n{$transcript}";
 
-            if (config('ai.providers.openai.key')) {
-                $response = (new ClauseExtractionAgent)
-                    ->provider('openai')
-                    ->model('gpt-4o-mini')
-                    ->prompt($promptText);
-
-                return $response->toArray();
+            $supervisor = new InterviewSupervisorAgent;
+            if (config('ai.providers.groq.key')) {
+                $response = $supervisor->provider('groq')->model('llama-3.3-70b-versatile')->prompt($promptText);
+                $merged = $this->merger->extractFromSupervisorResponse($response);
+                if (!empty($merged['age']['raw_signal']) && $merged['age']['raw_signal'] !== 'Age not stated') {
+                    return $merged;
+                }
             }
 
-            if (config('ai.providers.groq.key')) {
-                $response = (new ClauseExtractionAgent)
-                    ->provider('groq')
-                    ->model('llama-3.3-70b-versatile')
-                    ->prompt($promptText);
-
-                return $response->toArray();
+            if (config('ai.providers.openai.key')) {
+                $response = $supervisor->provider('openai')->model('gpt-4o-mini')->prompt($promptText);
+                $merged = $this->merger->extractFromSupervisorResponse($response);
+                if (!empty($merged['age']['raw_signal']) && $merged['age']['raw_signal'] !== 'Age not stated') {
+                    return $merged;
+                }
             }
 
             if (config('ai.providers.anthropic.key') || config('ai.providers.gemini.key')) {
-                $response = (new ClauseExtractionAgent)->prompt($promptText);
-
-                return $response->toArray();
+                $response = $supervisor->prompt($promptText);
+                $merged = $this->merger->extractFromSupervisorResponse($response);
+                if (!empty($merged['age']['raw_signal']) && $merged['age']['raw_signal'] !== 'Age not stated') {
+                    return $merged;
+                }
             }
         } catch (\Throwable $e) {
-            // Fallback to local heuristic extraction for robust offline / test performance
+            \Illuminate\Support\Facades\Log::warning('[sequa-supervisor] Supervisor fallback to heuristic extractor: ' . $e->getMessage());
         }
 
         return $this->heuristicExtraction($transcript);
+    }
+
+    /**
+     * Feature 2: Verifier-Critic Reflection Loop
+     * Cross-verifies extracted claims against the original transcript text.
+     */
+    private function verifySignals(string $transcript, array &$extracted): void
+    {
+        $checks = [];
+
+        try {
+            if (config('ai.providers.groq.key') || config('ai.providers.openai.key') || config('ai.providers.anthropic.key')) {
+                $verifier = new ExtractionVerifierAgent;
+                $prompt = "Transcript:\n{$transcript}\n\nExtracted claims to verify:\n" . json_encode($extracted, JSON_PRETTY_PRINT);
+
+                if (config('ai.providers.groq.key')) {
+                    $res = $verifier->provider('groq')->model('llama-3.3-70b-versatile')->prompt($prompt);
+                } else {
+                    $res = $verifier->prompt($prompt);
+                }
+
+                $verification = $res->toArray();
+                $checks = $verification['verifications'] ?? [];
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[sequa-verifier] AI verification failed, applying deterministic verification: ' . $e->getMessage());
+        }
+
+        // Apply LLM verification checks if returned
+        foreach ($checks as $check) {
+            $key = $check['topic_key'] ?? null;
+            if ($key && isset($extracted[$key])) {
+                if (! ($check['is_faithful'] ?? true)) {
+                    $extracted[$key]['confidence'] = 0.0;
+                    $extracted[$key]['verifier_flag'] = true;
+                    $extracted[$key]['verifier_note'] = $check['note'] ?? 'Flagged as unfaithful to source transcript by verifier critic.';
+                } else {
+                    $extracted[$key]['verifier_flag'] = false;
+                    $extracted[$key]['verifier_note'] = null;
+                }
+            }
+        }
+
+        // Deterministic Verification Guardrails:
+        // Fact-check quotes against transcript content
+        $lowerTranscript = strtolower($transcript);
+        foreach ($extracted as $key => &$topic) {
+            if ($key === 'needs_followup_on' || !is_array($topic)) {
+                continue;
+            }
+
+            if (!isset($topic['verifier_flag'])) {
+                $quote = $topic['evidence_quote'] ?? null;
+                if (!empty($quote)) {
+                    $normQuote = strtolower(trim($quote));
+                    if (!str_contains($lowerTranscript, $normQuote) && !str_contains($lowerTranscript, preg_replace('/[^\p{L}\p{N}\s]/u', '', $normQuote))) {
+                        $topic['confidence'] = 0.0;
+                        $topic['verifier_flag'] = true;
+                        $topic['verifier_note'] = "Extracted quote '{$quote}' not found in source transcript.";
+                        continue;
+                    }
+                }
+
+                $topic['verifier_flag'] = false;
+                $topic['verifier_note'] = null;
+            }
+        }
     }
 
     private function heuristicExtraction(string $text): array
