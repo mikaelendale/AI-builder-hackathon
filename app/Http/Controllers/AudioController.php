@@ -124,4 +124,48 @@ class AudioController extends Controller
             'message' => 'Set ADDIS_API_KEY for Addis Voices 2 server generation.',
         ]);
     }
+
+    /**
+     * Translate text via Addis AI (/api/v1/translate)
+     */
+    public function translate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'text' => 'required|string',
+            'from' => 'nullable|string',
+            'to' => 'nullable|string',
+        ]);
+
+        $translated = $this->addisAi->translate(
+            $request->input('text'),
+            $request->input('from', 'am'),
+            $request->input('to', 'en')
+        );
+
+        return response()->json([
+            'original' => $request->input('text'),
+            'translated' => $translated,
+            'provider' => 'addis-ai-translate',
+        ]);
+    }
+
+    /**
+     * Cost estimate for Addis Voices TTS generation
+     */
+    public function estimate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'text' => 'required|string',
+            'language' => 'nullable|string',
+            'voice_id' => 'nullable|string',
+        ]);
+
+        $estimate = $this->addisAi->estimate(
+            $request->input('text'),
+            $request->input('language', 'am'),
+            $request->input('voice_id')
+        );
+
+        return response()->json($estimate);
+    }
 }

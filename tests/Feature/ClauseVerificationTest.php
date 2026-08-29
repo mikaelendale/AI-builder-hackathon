@@ -192,4 +192,20 @@ class ClauseVerificationTest extends TestCase
         $response->assertOk();
         $this->assertArrayHasKey('text', $response->json());
     }
+
+    public function test_audio_speak_and_translate_endpoints(): void
+    {
+        $speakRes = $this->postJson('/api/audio/speak', [
+            'text' => 'ሰላም እንዴት ነዎት?',
+            'language' => 'am',
+        ]);
+        $speakRes->assertOk();
+
+        $translateRes = $this->postJson('/api/audio/translate', [
+            'text' => 'ሰላም',
+            'from' => 'am',
+            'to' => 'en',
+        ]);
+        $translateRes->assertOk();
+    }
 }

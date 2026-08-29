@@ -82,4 +82,33 @@ class AddisAiVoice
 
         return $response->json('data') ?? $response->json() ?? [];
     }
+
+    /**
+     * Translate Amharic <-> English via Addis AI (/api/v1/translate)
+     */
+    public function translate(string $text, string $from = 'am', string $to = 'en'): string
+    {
+        if (empty($this->apiKey)) {
+            return $text;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'content-type' => 'application/json',
+            ])->post("{$this->baseUrl}/api/v1/translate", [
+                'text' => $text,
+                'source_language' => $from,
+                'target_language' => $to,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json('data.translated_text') ?? $response->json('translated_text') ?? $text;
+            }
+        } catch (\Throwable $e) {
+            // Fall back to original text
+        }
+
+        return $text;
+    }
 }

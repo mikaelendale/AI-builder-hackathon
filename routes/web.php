@@ -15,5 +15,7 @@ Route::post('/interviews/{interview}/transcript', [InterviewController::class, '
 Route::post('/interviews/{interview}/complete', [InterviewController::class, 'complete'])->name('interview.complete');
 Route::post('/api/audio/transcribe', [AudioController::class, 'transcribe'])->name('audio.transcribe');
 Route::post('/api/audio/speak', [AudioController::class, 'speak'])->name('audio.speak');
+Route::post('/api/audio/translate', [AudioController::class, 'translate'])->name('audio.translate');
+Route::post('/api/audio/estimate', [AudioController::class, 'estimate'])->name('audio.estimate');
 
 require __DIR__.'/settings.php';
