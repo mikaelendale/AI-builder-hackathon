@@ -81,6 +81,36 @@ class InterviewController extends Controller
         ]);
     }
 
+    /**
+     * Quick-create a beneficiary and immediately start an interview (for custom/live personas)
+     */
+    public function quickCreateBeneficiary(Request $request): JsonResponse
+    {
+        $name = $request->input('name', 'Live Beneficiary');
+        $lang = $request->input('language', 'en');
+        $phoneType = $request->input('phone_type', 'smartphone');
+
+        $beneficiary = Beneficiary::create([
+            'name' => $name,
+            'persona_type' => 'synthetic',
+            'phone_type' => $phoneType,
+            'language' => $lang,
+        ]);
+
+        $interview = Interview::create([
+            'beneficiary_id' => $beneficiary->id,
+            'status' => 'in_progress',
+            'consent_given' => true,
+            'started_at' => now(),
+        ]);
+
+        return response()->json([
+            'interview_id' => $interview->id,
+            'beneficiary_id' => $beneficiary->id,
+            'interview' => $interview->load('beneficiary'),
+        ]);
+    }
+
     public function submitTranscript(Request $request, Interview $interview): JsonResponse
     {
         $request->validate([
@@ -160,6 +190,199 @@ class InterviewController extends Controller
         ]);
     }
 
+    /**
+     * Real-time back-and-forth conversational turn with auto-speech generation
+     */
+    public function converse(Request $request, Interview $interview): JsonResponse
+    {
+        $lang = $request->input('language', $interview->beneficiary?->language ?? 'en');
+        $userText = trim($request->input('transcript', ''));
+
+        // Check if browser-side live speech transcript was provided
+        if (empty($userText) && $request->filled('interim_text')) {
+            $userText = trim($request->input('interim_text'));
+        }
+
+        // 1. If userText is still empty and audio file is uploaded, transcribe with Addis AI (Amharic) or OpenAI Whisper (English)
+        if (empty($userText) && $request->hasFile('audio')) {
+            $audioFile = $request->file('audio');
+            if (in_array($lang, ['am', 'om']) || $interview->beneficiary?->persona_type === 'abel') {
+                $addis = app(\App\Services\AddisAiVoice::class);
+                $transcription = $addis->transcribe($audioFile->getRealPath(), 'am');
+                if (!empty($transcription)) {
+                    $userText = trim($transcription);
+                    $lang = 'am';
+                }
+            } else {
+                $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
+                if ($openAiKey) {
+                    try {
+                        $res = \Illuminate\Support\Facades\Http::withToken($openAiKey)
+                            ->attach('file', file_get_contents($audioFile->getRealPath()), 'audio.webm')
+                            ->post('https://api.openai.com/v1/audio/transcriptions', [
+                                'model' => 'whisper-1',
+                                'response_format' => 'json',
+                            ]);
+                        if ($res->successful()) {
+                            $userText = trim($res->json('text') ?? '');
+                        }
+                    } catch (\Throwable $e) {}
+                }
+            }
+        }
+
+        if (empty($userText)) {
+            // Try to also auto-synthesize a retry prompt so the user hears it
+            $retryText = $lang === 'am' ? 'እባክዎን እንደገና ይናገሩ...' : 'Could not hear clearly, please speak again...';
+            $audioUrl = $this->synthesizeSpeech($retryText, $lang);
+
+            return response()->json([
+                'error' => 'No speech detected.',
+                'agent_text' => $retryText,
+                'audio_url' => $audioUrl,
+                'retry' => true,
+            ], 422);
+        }
+
+        // Auto-detect language if Amharic Fidel characters are in the text
+        if (preg_match('/[\x{1200}-\x{137F}]/u', $userText)) {
+            $lang = 'am';
+        }
+
+        // 2. Append to interview raw transcript
+        $updatedTranscript = $interview->transcript_raw
+            ? $interview->transcript_raw . "\n[Beneficiary]: " . $userText
+            : "[Beneficiary]: " . $userText;
+
+        $interview->update([
+            'transcript_raw' => $updatedTranscript,
+        ]);
+
+        // 3. Extract signals & calculate deterministic rule engine verdicts
+        $extracted = $this->extractSignals($updatedTranscript);
+        $verdicts = $this->ruleEngine->evaluate($interview, $extracted);
+
+        // 4. Check Under-15 Hard Stop
+        if (($verdicts['age_15_plus']['status'] ?? null) === 'not_met') {
+            $interview->update([
+                'status' => 'stopped_hard_case',
+                'completed_at' => now(),
+            ]);
+
+            HardCaseFlag::firstOrCreate(
+                ['interview_id' => $interview->id, 'type' => 'under_15'],
+                ['detail' => $verdicts['age_15_plus']['reason'] ?? 'Beneficiary stated age under 15 years old.']
+            );
+
+            $agentText = $lang === 'am'
+                ? 'ዕድሜዎ ከ15 ዓመት በታች በመሆኑ ቃለ-መጠይቁ እዚህ ላይ ተጠናቋል። እናመሰግናለን።'
+                : 'As your age is under the legal threshold of 15, this verification interview has terminated immediately.';
+
+            $audioUrl = $this->synthesizeSpeech($agentText, $lang);
+
+            return response()->json([
+                'user_text' => $userText,
+                'agent_text' => $agentText,
+                'audio_url' => $audioUrl,
+                'stopped' => true,
+                'is_complete' => true,
+                'verdicts' => $verdicts,
+                'transcript_raw' => $updatedTranscript,
+            ]);
+        }
+
+        // Store clause assessments
+        foreach ($verdicts as $clauseKey => $verdict) {
+            ClauseAssessment::updateOrCreate(
+                [
+                    'interview_id' => $interview->id,
+                    'clause_key' => $clauseKey,
+                ],
+                [
+                    'status' => $verdict['status'],
+                    'confidence' => $verdict['confidence'],
+                    'evidence_quote' => $verdict['evidence_quote'] ?? null,
+                    'raw_llm_output' => $extracted[$clauseKey] ?? null,
+                    'sdg_tags' => $verdict['sdg_tags'] ?? [],
+                ]
+            );
+        }
+
+        // 5. Check if any clause is unclear and needs a targeted follow-up probe
+        $unclearClause = collect($verdicts)->first(fn ($v) => $v['status'] === 'unclear');
+        $unclearKey = collect($verdicts)->filter(fn ($v) => $v['status'] === 'unclear')->keys()->first();
+
+        $followUpsNeeded = collect($verdicts)
+            ->filter(fn ($v) => $v['status'] === 'unclear')
+            ->keys()
+            ->map(fn ($key) => [
+                'clause_key' => $key,
+                'question' => $this->followUps->forClause($key, $lang),
+                'ambiguous_quote' => $verdicts[$key]['evidence_quote'] ?? null,
+                'reason' => $verdicts[$key]['reason'] ?? 'Information ambiguous',
+            ])
+            ->filter(fn ($f) => $f['question'] !== null)
+            ->values();
+
+        if ($unclearKey) {
+            $question = $this->followUps->forClause($unclearKey, $lang);
+            $agentText = $question ?: ($lang === 'am' ? 'እባክዎን ተጨማሪ ማብራሪያ ይስጡ?' : 'Could you clarify that further?');
+            $isComplete = false;
+        } else {
+            $agentText = $lang === 'am'
+                ? 'እናመሰግናለን! ሁሉም 7 የሥራ ሁኔታ ማረጋገጫዎች በተሳካ ሁኔታ ተመዝግበዋል።'
+                : 'Thank you! All 7 statutory employment conditions have been successfully verified and recorded.';
+            $isComplete = true;
+        }
+
+        // 6. Synthesize speech for back-and-forth conversational AI audio
+        $audioUrl = $this->synthesizeSpeech($agentText, $lang);
+
+        return response()->json([
+            'user_text' => $userText,
+            'agent_text' => $agentText,
+            'audio_url' => $audioUrl,
+            'stopped' => false,
+            'is_complete' => $isComplete,
+            'verdicts' => $verdicts,
+            'follow_ups' => $followUpsNeeded,
+            'transcript_raw' => $updatedTranscript,
+        ]);
+    }
+
+    private function synthesizeSpeech(string $text, string $lang): ?string
+    {
+        // For Amharic, use Addis AI Addis Voices 2
+        if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
+            try {
+                $addis = app(\App\Services\AddisAiVoice::class);
+                $url = $addis->speak($text, 'am', 'am-hamen');
+                if (!empty($url)) {
+                    return $url;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // For English, use OpenAI TTS
+        $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
+        if ($lang === 'en' && $openAiKey) {
+            try {
+                $res = \Illuminate\Support\Facades\Http::withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
+                    'model' => 'tts-1',
+                    'input' => $text,
+                    'voice' => 'alloy',
+                    'response_format' => 'mp3',
+                ]);
+                if ($res->successful()) {
+                    $base64 = base64_encode($res->body());
+                    return "data:audio/mp3;base64,{$base64}";
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        return null;
+    }
+
     public function complete(Request $request, Interview $interview): JsonResponse
     {
         $interview->update([
@@ -195,10 +418,28 @@ class InterviewController extends Controller
     private function extractSignals(string $transcript): array
     {
         try {
-            if (config('ai.providers.groq.key') || config('ai.providers.anthropic.key') || config('ai.providers.openai.key') || config('ai.providers.gemini.key')) {
-                $response = (new ClauseExtractionAgent)->prompt(
-                    "Interview transcript:\n\n{$transcript}"
-                );
+            $promptText = "Interview transcript:\n\n{$transcript}";
+
+            if (config('ai.providers.openai.key')) {
+                $response = (new ClauseExtractionAgent)
+                    ->provider('openai')
+                    ->model('gpt-4o-mini')
+                    ->prompt($promptText);
+
+                return $response->toArray();
+            }
+
+            if (config('ai.providers.groq.key')) {
+                $response = (new ClauseExtractionAgent)
+                    ->provider('groq')
+                    ->model('llama-3.3-70b-versatile')
+                    ->prompt($promptText);
+
+                return $response->toArray();
+            }
+
+            if (config('ai.providers.anthropic.key') || config('ai.providers.gemini.key')) {
+                $response = (new ClauseExtractionAgent)->prompt($promptText);
 
                 return $response->toArray();
             }

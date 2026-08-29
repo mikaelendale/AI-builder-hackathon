@@ -25,15 +25,29 @@ class AddisAiVoice
             return '';
         }
 
-        $response = Http::withHeaders(['x-api-key' => $this->apiKey])
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+            ])
             ->attach('audio', file_get_contents($audioPath), basename($audioPath))
             ->post("{$this->baseUrl}/api/v2/stt", [
                 'request_data' => json_encode(['language_code' => $languageCode]),
+                'language_code' => $languageCode,
             ]);
 
-        $response->throw();
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data['data']['transcription'] 
+                    ?? $data['transcription'] 
+                    ?? $data['text'] 
+                    ?? $data['data']['text'] 
+                    ?? '';
+            }
+        } catch (\Throwable $e) {
+            // Log or fallback
+        }
 
-        return $response->json('data.transcription') ?? '';
+        return '';
     }
 
     /**
@@ -46,20 +60,30 @@ class AddisAiVoice
             return '';
         }
 
-        $response = Http::withHeaders([
-            'x-api-key' => $this->apiKey,
-            'content-type' => 'application/json',
-        ])->post("{$this->baseUrl}/api/v1/voice/generations", [
-            'text' => $text,
-            'voice_id' => $voiceId ?? config('services.addis.default_voice_id', env('ADDIS_DEFAULT_VOICE_ID', 'am-hamen')),
-            'language' => $languageCode,
-            'output_format' => 'mp3_44100',
-            'client_request_id' => (string) Str::uuid(),
-        ]);
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'content-type' => 'application/json',
+            ])->post("{$this->baseUrl}/api/v1/voice/generations", [
+                'text' => $text,
+                'voice_id' => $voiceId ?? config('services.addis.default_voice_id', env('ADDIS_DEFAULT_VOICE_ID', 'am-hamen')),
+                'language' => $languageCode,
+                'output_format' => 'mp3_44100',
+                'client_request_id' => (string) Str::uuid(),
+            ]);
 
-        $response->throw();
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data['data']['audio_url'] 
+                    ?? $data['audio_url'] 
+                    ?? $data['data']['url'] 
+                    ?? '';
+            }
+        } catch (\Throwable $e) {
+            // Log or fallback
+        }
 
-        return $response->json('data.audio_url') ?? '';
+        return '';
     }
 
     public function estimate(string $text, string $languageCode = 'am', ?string $voiceId = null): array

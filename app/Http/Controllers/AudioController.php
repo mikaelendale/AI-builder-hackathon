@@ -42,7 +42,36 @@ class AudioController extends Controller
             }
         }
 
-        // 2. Try direct Groq Whisper API (whisper-large-v3-turbo)
+        // 2. Try OpenAI Whisper API if OPENAI_API_KEY is configured
+        $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
+        if ($openAiKey) {
+            try {
+                $response = Http::withToken($openAiKey)
+                    ->attach(
+                        'file',
+                        file_get_contents($file->getRealPath()),
+                        $file->getClientOriginalName() ?: 'audio.webm'
+                    )
+                    ->post('https://api.openai.com/v1/audio/transcriptions', [
+                        'model' => 'whisper-1',
+                        'response_format' => 'json',
+                        'temperature' => 0.0,
+                    ]);
+
+                if ($response->successful()) {
+                    $text = $response->json('text') ?? '';
+                    return response()->json([
+                        'text' => trim($text),
+                        'provider' => 'openai-whisper-1',
+                        'language' => $lang,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // Fall through
+            }
+        }
+
+        // 3. Try direct Groq Whisper API (whisper-large-v3-turbo)
         $groqKey = config('ai.providers.groq.key') ?? env('GROQ_API_KEY');
         if ($groqKey) {
             try {
@@ -71,7 +100,7 @@ class AudioController extends Controller
             }
         }
 
-        // 3. Try Laravel AI SDK Transcription
+        // 4. Try Laravel AI SDK Transcription
         try {
             $transcript = Transcription::fromUpload($file)->generate();
             return response()->json([
@@ -89,7 +118,7 @@ class AudioController extends Controller
     }
 
     /**
-     * Synthesize audio via Addis AI Voices 2 (Amharic / Afaan Oromo)
+     * Generate spoken audio via Addis Voices 2 (Amharic) or OpenAI TTS (English)
      */
     public function speak(Request $request): JsonResponse
     {
@@ -103,7 +132,8 @@ class AudioController extends Controller
         $lang = $request->input('language', 'am');
         $voiceId = $request->input('voice_id');
 
-        if (env('ADDIS_API_KEY')) {
+        // 1. If Amharic, use Addis AI Addis Voices 2
+        if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
             try {
                 $audioUrl = $this->addisAi->speak($text, $lang, $voiceId);
                 if (!empty($audioUrl)) {
@@ -113,14 +143,37 @@ class AudioController extends Controller
                     ]);
                 }
             } catch (\Throwable $e) {
-                // Fall back to browser speech synthesis
+                // Fall back
+            }
+        }
+
+        // 2. If English and OpenAI key present, use OpenAI TTS
+        $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
+        if ($lang === 'en' && $openAiKey) {
+            try {
+                $response = Http::withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
+                    'model' => 'tts-1',
+                    'input' => $text,
+                    'voice' => 'alloy',
+                    'response_format' => 'mp3',
+                ]);
+
+                if ($response->successful()) {
+                    $base64 = base64_encode($response->body());
+                    return response()->json([
+                        'audio_url' => "data:audio/mp3;base64,{$base64}",
+                        'provider' => 'openai-tts',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // Fall back
             }
         }
 
         return response()->json([
             'audio_url' => null,
             'provider' => 'browser-speech-synthesis',
-            'message' => 'Addis Voices 2 unavailable or key not configured; using browser speech synthesis fallback.',
+            'message' => 'Using browser speech synthesis fallback.',
         ]);
     }
 
