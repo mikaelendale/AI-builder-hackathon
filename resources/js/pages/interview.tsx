@@ -10,6 +10,7 @@ import {
     Mic,
     MicOff,
     Play,
+    Radio,
     RefreshCcw,
     Send,
     Shield,
@@ -94,8 +95,10 @@ const PERSONA_SCRIPTS = {
         role: 'Call Centre Agent (Addis Ababa)',
         lang: 'en',
         type: 'selam' as const,
-        description: 'Selam, 22, Addis Ababa. Trained free in sales, placed in a call centre 6 months ago, paid monthly. Smartphone, limited data bundle. Nobody has asked her whether a contract exists or pension is deducted. → Clean case. English. All clauses resolve met with high confidence.',
-        script: 'Hello. My name is Selam Tesfaye, I am 22 years old. I was placed in a call centre in Addis Ababa 6 months ago. I work 40 hours per week, Monday through Friday, 8 hours a day. I am paid 6500 ETB monthly with direct bank deposit and pension deducted. I am free to join the workers group, there is no discrimination, no forced labour, and I started this job as an adult.',
+        description:
+            'Selam, 22, Addis Ababa. Trained free in sales, placed in a call centre 6 months ago, paid monthly. Smartphone, limited data bundle. Nobody has asked her whether a contract exists or pension is deducted. → Clean case. English. All clauses resolve met with high confidence.',
+        script:
+            'Hello. My name is Selam Tesfaye, I am 22 years old. I was placed in a call centre in Addis Ababa 6 months ago. I work 40 hours per week, Monday through Friday, 8 hours a day. I am paid 6500 ETB monthly with direct bank deposit and pension deducted. I am free to join the workers group, there is no discrimination, no forced labour, and I started this job as an adult.',
     },
     abel: {
         name: 'Abel Kebede',
@@ -103,8 +106,10 @@ const PERSONA_SCRIPTS = {
         role: 'Construction Daily Worker (Adama)',
         lang: 'am',
         type: 'abel' as const,
-        description: "Abel, 19, construction site outside Adama. Daily/seasonal worker, paid in cash. Feature phone, Amharic only, reads poorly. Started 'after the rains' — he cannot say if that's 5 or 7 months. → Ambiguous case. Amharic. The hours/duration clause resolves unclear, triggering a targeted follow-up probe. (Central 'we don't guess' moment).",
-        script: 'ስሜ አቤል ከበደ ይባላል። ዕድሜዬ 19 ዓመት ነው። በአዳማ ከተማ አቅራቢያ በኮንስትራክሽን ቦታ ላይ በቀን ሠራተኛነት እሠራለሁ። ክፍያዬን በጥሬ ገንዘብ ነው የማገኘው። ሥራውን የጀመርኩት ከክረምቱ በኋላ ነው፣ አምስት ወይም ሰባት ወር ሊሆን ይችላል፣ ሥራ በተገኘበት ቀን ብቻ ነው የምሠራው።',
+        description:
+            "Abel, 19, construction site outside Adama. Daily/seasonal worker, paid in cash. Feature phone, Amharic only, reads poorly. Started 'after the rains' — he cannot say if that's 5 or 7 months. → Ambiguous case. Amharic. The hours/duration clause resolves unclear, triggering a targeted follow-up probe. (Central 'we don't guess' moment).",
+        script:
+            'ስሜ አቤል ከበደ ይባላል። ዕድሜዬ 19 ዓመት ነው። በአዳማ ከተማ አቅራቢያ በኮንስትራክሽን ቦታ ላይ በቀን ሠራተኛነት እሠራለሁ። ክፍያዬን በጥሬ ገንዘብ ነው የማገኘው። ሥራውን የጀመርኩት ከክረምቱ በኋላ ነው፣ አምስት ወይም ሰባት ወር ሊሆን ይችላል፣ ሥራ በተገኘበት ቀን ብቻ ነው የምሠራው።',
         followUpAnswer: 'በተለመደው ሳምንት ውስጥ 35 ሰዓት እሠራለሁ፣ እና ከጀመርኩ 6 ወር ሆኖኛል።',
     },
     minor: {
@@ -114,7 +119,8 @@ const PERSONA_SCRIPTS = {
         lang: 'en',
         type: 'synthetic' as const,
         description: 'Under-15 detected → interview stops immediately, flags to hard_case_flags, never counts.',
-        script: 'Hello, my name is Yordanos Girma. I am 14 years old. I work helping at the packaging workshop after school hours for 15 hours a week.',
+        script:
+            'Hello, my name is Yordanos Girma. I am 14 years old. I work helping at the packaging workshop after school hours for 15 hours a week.',
     },
 };
 
@@ -127,11 +133,13 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     const [isStreaming, setIsStreaming] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
     const [stoppedHardCase, setStoppedHardCase] = useState(false);
     const [hardCaseDetail, setHardCaseDetail] = useState<string | null>(null);
     const [followUps, setFollowUps] = useState<FollowUp[]>([]);
     const [activeFollowUpAnswer, setActiveFollowUpAnswer] = useState('');
     const [isCompleted, setIsCompleted] = useState(initialInterview?.status === 'completed');
+    const [audioProviderNotice, setAudioProviderNotice] = useState<string | null>(null);
 
     const [verdicts, setVerdicts] = useState<Record<string, ClauseVerdict>>(() => {
         const initial: Record<string, ClauseVerdict> = {};
@@ -142,6 +150,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     });
 
     const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const speechRecognitionRef = useRef<any>(null);
 
     // If initial interview exists, populate verdicts
     useEffect(() => {
@@ -193,6 +204,22 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         streamTimeoutRef.current = interval as unknown as NodeJS.Timeout;
     };
 
+    // Text to Speech for questions & follow-ups
+    const speakText = (text: string, lang = 'en-US') => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+            if (lang.startsWith('am')) {
+                utterance.lang = 'am-ET';
+            } else {
+                utterance.lang = 'en-US';
+            }
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
     // Start a new interview
     const handleStartInterview = async (personaKey: 'selam' | 'abel' | 'minor') => {
         setSelectedPersona(personaKey);
@@ -208,7 +235,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         });
         setVerdicts(initialV);
 
-        // Find or use first matching beneficiary
+        // Find or use matching beneficiary
         let targetBeneficiary = beneficiaries.find((b) => b.persona_type === p.type);
         if (!targetBeneficiary && beneficiaries.length > 0) {
             targetBeneficiary = beneficiaries[0];
@@ -241,7 +268,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
     };
 
-    // Submit transcript to server
+    // Submit transcript to server (Structured Groq extraction -> Plain PHP Rule Engine)
     const submitTranscriptText = async (interviewId: number, textToSend: string) => {
         setIsSubmitting(true);
         try {
@@ -267,6 +294,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 }
                 if (data.follow_ups && data.follow_ups.length > 0) {
                     setFollowUps(data.follow_ups);
+                    // Automatically voice the first follow-up question
+                    speakText(data.follow_ups[0].question, selectedPersona === 'abel' ? 'am' : 'en');
                 } else {
                     setFollowUps([]);
                 }
@@ -275,6 +304,135 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             console.error('Error processing transcript:', err);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Real mic audio recording using MediaRecorder & Groq Whisper STT
+    const startMicRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunksRef.current = [];
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                stream.getTracks().forEach((track) => track.stop());
+                await uploadAudioForTranscription(audioBlob);
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+
+            // Optional Web Speech API live preview
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = selectedPersona === 'abel' ? 'am-ET' : 'en-US';
+
+                recognition.onresult = (event: any) => {
+                    let interim = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        interim += event.results[i][0].transcript;
+                    }
+                    if (interim) {
+                        setDisplayedTranscript((prev) => (prev ? `${prev} ${interim}` : interim));
+                    }
+                };
+
+                recognition.start();
+                speechRecognitionRef.current = recognition;
+            }
+        } catch (err) {
+            console.warn('Microphone permission denied or not available, falling back to simulated voice:', err);
+            // Fallback to simulated persona
+            if (selectedPersona === 'selam') {
+                handleStartInterview('selam');
+            } else if (selectedPersona === 'abel') {
+                handleStartInterview('abel');
+            } else {
+                handleStartInterview('minor');
+            }
+        }
+    };
+
+    const stopMicRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+        if (speechRecognitionRef.current) {
+            try {
+                speechRecognitionRef.current.stop();
+            } catch (e) {}
+        }
+        setIsRecording(false);
+    };
+
+    // Upload audio blob to backend Groq Whisper endpoint
+    const uploadAudioForTranscription = async (blob: Blob) => {
+        setIsTranscribingAudio(true);
+        try {
+            const formData = new FormData();
+            formData.append('audio', blob, 'voice-interview.webm');
+
+            const res = await fetch('/api/audio/transcribe', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                },
+                body: formData,
+            });
+
+            const data = await res.json();
+            if (data.text) {
+                setAudioProviderNotice(data.provider || 'Groq Whisper Turbo');
+                const newText = data.text;
+                setTranscript((prev) => (prev ? `${prev}\n${newText}` : newText));
+                setDisplayedTranscript((prev) => (prev ? `${prev}\n${newText}` : newText));
+
+                // Ensure an interview is started if none exists
+                let interviewId = currentInterviewId;
+                if (!interviewId) {
+                    const defaultBeneficiary = beneficiaries[0];
+                    if (defaultBeneficiary) {
+                        const startRes = await fetch(`/beneficiaries/${defaultBeneficiary.id}/interviews`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                            },
+                            body: JSON.stringify({ consent_given: consentGiven }),
+                        });
+                        const startData = await startRes.json();
+                        interviewId = startData.interview_id;
+                        setCurrentInterviewId(interviewId);
+                    }
+                }
+
+                if (interviewId) {
+                    submitTranscriptText(interviewId, newText);
+                }
+            }
+        } catch (err) {
+            console.error('Error transcribing audio:', err);
+        } finally {
+            setIsTranscribingAudio(false);
+        }
+    };
+
+    const toggleRecording = () => {
+        if (isRecording) {
+            stopMicRecording();
+        } else {
+            startMicRecording();
         }
     };
 
@@ -322,38 +480,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
     };
 
-    // Voice simulation using browser speech synthesis / speech recognition
-    const speakText = (text: string) => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.95;
-            utterance.pitch = 1.0;
-            window.speechSynthesis.speak(utterance);
-        }
-    };
-
-    // Toggle mic
-    const toggleRecording = () => {
-        if (isRecording) {
-            setIsRecording(false);
-        } else {
-            setIsRecording(true);
-            // Simulate voice capture
-            setTimeout(() => {
-                setIsRecording(false);
-                if (selectedPersona === 'selam') {
-                    handleStartInterview('selam');
-                } else if (selectedPersona === 'abel') {
-                    handleStartInterview('abel');
-                }
-            }, 2500);
-        }
-    };
-
     return (
         <>
-            <Head title="Live Beneficiary Voice Interview" />
+            <Head title="Live Beneficiary Voice Interview (Phase 3 Voice Loop)" />
 
             <div className="min-h-screen bg-neutral-950 py-4 px-2 sm:px-4 text-neutral-100 flex flex-col items-center justify-start">
                 {/* Stage Header Info Banner */}
@@ -363,7 +492,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span>Challenge 3 • sequa Ethiopia</span>
+                        <span>Groq Voice Loop • Whisper STT</span>
                     </div>
                     <Badge variant="outline" className="border-neutral-800 text-[10px] text-neutral-400 bg-neutral-900/60">
                         Phone Viewport (390px)
@@ -409,7 +538,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     <div className="p-3 bg-neutral-950/60 border-b border-neutral-800">
                         <div className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400 mb-1.5 flex items-center justify-between">
                             <span>Select Live Demo Persona:</span>
-                            <span className="text-emerald-400">Zero Guessing Core</span>
+                            <span className="text-emerald-400 font-mono">Zero-Guessing Core</span>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                             <button
@@ -417,7 +546,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('selam')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'selam'
-                                        ? 'border-emerald-500/80 bg-emerald-950/30 text-emerald-300'
+                                        ? 'border-emerald-500/80 bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-500/40'
                                         : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
                                 }`}
                             >
@@ -433,7 +562,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('abel')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'abel'
-                                        ? 'border-amber-500/80 bg-amber-950/30 text-amber-300'
+                                        ? 'border-amber-500/80 bg-amber-950/30 text-amber-300 ring-1 ring-amber-500/40'
                                         : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
                                 }`}
                             >
@@ -449,7 +578,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 onClick={() => handleStartInterview('minor')}
                                 className={`p-2 rounded-xl text-left border transition-all ${
                                     selectedPersona === 'minor'
-                                        ? 'border-rose-500/80 bg-rose-950/30 text-rose-300'
+                                        ? 'border-rose-500/80 bg-rose-950/30 text-rose-300 ring-1 ring-rose-500/40'
                                         : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
                                 }`}
                             >
@@ -457,7 +586,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
                                     Yordanos (14)
                                 </div>
-                                <div className="text-[10px] text-neutral-400 truncate">Minor Hard Stop</div>
+                                <div className="text-[10px] text-neutral-400 truncate">Under-15 Stop</div>
                             </button>
                         </div>
                     </div>
@@ -477,13 +606,14 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
                         {/* Under-15 Hard Stop Alert */}
                         {stoppedHardCase && (
-                            <Alert className="border-rose-500/80 bg-rose-950/50 text-rose-200">
+                            <Alert className="border-rose-500/80 bg-rose-950/50 text-rose-200 animate-in zoom-in-95 duration-200">
                                 <ShieldAlert className="h-4 w-4 text-rose-400" />
                                 <AlertTitle className="text-xs font-bold text-rose-300 uppercase tracking-wide">
-                                    Hard Stop Triggered — Under 15
+                                    Hard Stop Triggered — Under 15 Minor
                                 </AlertTitle>
-                                <AlertDescription className="text-xs mt-1 text-rose-200/90">
-                                    {hardCaseDetail || 'Stated age is under the legal minimum of 15. The interview has terminated immediately and cannot count toward programme employment totals.'}
+                                <AlertDescription className="text-xs mt-1 text-rose-200/90 leading-relaxed">
+                                    {hardCaseDetail ||
+                                        'Beneficiary stated age is under the legal minimum of 15. The interview has terminated immediately and cannot count toward programme employment totals.'}
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -493,24 +623,34 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between">
                                 <CardTitle className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
                                     <Volume2 className="w-3 h-3 text-emerald-400" />
-                                    Live Audio Stream & Transcript
+                                    Live Voice Stream & Transcript
                                 </CardTitle>
-                                {isStreaming && (
+                                {isRecording ? (
+                                    <span className="text-[10px] text-rose-400 animate-pulse flex items-center gap-1 font-semibold">
+                                        <Radio className="w-3 h-3 text-rose-400 animate-spin" /> Recording Mic...
+                                    </span>
+                                ) : isTranscribingAudio ? (
+                                    <span className="text-[10px] text-amber-400 animate-pulse flex items-center gap-1">
+                                        <RefreshCcw className="w-3 h-3 animate-spin" /> Groq Whisper STT...
+                                    </span>
+                                ) : isStreaming ? (
                                     <span className="text-[10px] text-emerald-400 animate-pulse flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Transcribing...
                                     </span>
-                                )}
+                                ) : null}
                             </CardHeader>
                             <CardContent className="p-2.5 pt-1">
-                                <div className="min-h-[70px] bg-neutral-900/80 border border-neutral-800 rounded-lg p-2 text-xs leading-relaxed font-sans text-neutral-200">
+                                <div className="min-h-[75px] bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5 text-xs leading-relaxed font-sans text-neutral-200">
                                     {displayedTranscript ? (
                                         <span>
                                             {displayedTranscript}
-                                            {isStreaming && <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-1 animate-pulse" />}
+                                            {(isStreaming || isRecording) && (
+                                                <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-1 animate-pulse" />
+                                            )}
                                         </span>
                                     ) : (
                                         <span className="text-neutral-500 italic">
-                                            Press any persona above or tap the microphone to start speaking...
+                                            Click a persona above or tap the microphone button below to record live voice...
                                         </span>
                                     )}
                                 </div>
@@ -520,13 +660,13 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => speakText(displayedTranscript)}
+                                            onClick={() => speakText(displayedTranscript, selectedPersona === 'abel' ? 'am' : 'en')}
                                             className="h-6 text-[10px] text-neutral-400 hover:text-white px-2"
                                         >
-                                            <Volume2 className="w-3 h-3 mr-1" /> Replay Audio
+                                            <Volume2 className="w-3 h-3 mr-1" /> Replay Voice Audio
                                         </Button>
                                         <span className="text-[10px] text-neutral-500 font-mono">
-                                            Confidence: {isSubmitting ? 'Evaluating...' : 'Deterministic Split'}
+                                            {isSubmitting ? 'Groq Extraction...' : 'Deterministic Rule Engine'}
                                         </span>
                                     </div>
                                 )}
@@ -539,22 +679,32 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
                                         <HelpCircle className="w-4 h-4 text-amber-400" />
-                                        Targeted Follow-up Probe
+                                        Targeted Follow-up Probe ("We Don't Guess")
                                     </div>
                                     <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">
-                                        Clause Ambiguous
+                                        Ambiguity Detected
                                     </Badge>
                                 </div>
 
                                 {followUps[0].ambiguous_quote && (
                                     <div className="text-[11px] bg-amber-950/80 border border-amber-700/40 rounded p-1.5 text-amber-200/90">
-                                        <span className="text-[10px] text-amber-400/80 font-medium block">Ambiguous Trigger Quote:</span>
+                                        <span className="text-[10px] text-amber-400/80 font-medium block">
+                                            Ambiguous Trigger Evidence Quote:
+                                        </span>
                                         "{followUps[0].ambiguous_quote}"
                                     </div>
                                 )}
 
-                                <p className="text-xs text-white font-medium bg-neutral-900/90 p-2 rounded-lg border border-neutral-700">
-                                    "{followUps[0].question}"
+                                <p className="text-xs text-white font-medium bg-neutral-900/90 p-2 rounded-lg border border-neutral-700 flex items-center justify-between">
+                                    <span>"{followUps[0].question}"</span>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => speakText(followUps[0].question, selectedPersona === 'abel' ? 'am' : 'en')}
+                                        className="h-6 w-6 text-amber-400 hover:bg-neutral-800"
+                                    >
+                                        <Volume2 className="w-3.5 h-3.5" />
+                                    </Button>
                                 </p>
 
                                 <div className="flex gap-1.5 pt-1">
@@ -565,7 +715,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         placeholder={
                                             selectedPersona === 'abel'
                                                 ? 'አቤል ምላሽ: 35 ሰዓት በሳምንት...'
-                                                : 'Enter precise hours / weeks...'
+                                                : 'Enter precise hours or duration...'
                                         }
                                         className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-amber-400"
                                     />
@@ -584,7 +734,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 px-1">
                                 <span>Statutory Clause Engine (7 Checks)</span>
-                                <span className="text-[10px] text-emerald-400 font-mono">Plain PHP Verdicts</span>
+                                <span className="text-[10px] text-emerald-400 font-mono">Plain PHP Engine</span>
                             </div>
 
                             <div className="grid grid-cols-1 gap-1.5">
@@ -672,7 +822,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     onClick={toggleRecording}
                                     className={`h-11 w-11 rounded-full transition-all ${
                                         isRecording
-                                            ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                                            ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse ring-4 ring-rose-900/50'
                                             : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950'
                                     }`}
                                 >
@@ -680,7 +830,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p className="text-xs">{isRecording ? 'Listening...' : 'Hold or Click to Speak'}</p>
+                                <p className="text-xs">
+                                    {isRecording ? 'Click to Stop Recording' : 'Hold or Click to Speak Live Mic'}
+                                </p>
                             </TooltipContent>
                         </Tooltip>
 
@@ -696,7 +848,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
                 {/* Stage Lens Footer Notice */}
                 <div className="w-full max-w-[420px] mt-3 text-center text-[11px] text-neutral-400">
-                    <span className="font-semibold text-neutral-300">Win Condition:</span> Live voice interview feeds straight into the 23-company monitoring sheet.
+                    <span className="font-semibold text-neutral-300">Phase 3 Live Voice:</span> STT $\rightarrow$ Extraction $\rightarrow$ Rule Engine $\rightarrow$ Follow-up Probe $\rightarrow$ TTS.
                 </div>
             </div>
         </>
