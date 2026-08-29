@@ -172,7 +172,7 @@ class InterviewController extends Controller
     private function extractSignals(string $transcript): array
     {
         try {
-            if (config('ai.providers.anthropic.key') || config('ai.providers.openai.key') || config('ai.providers.gemini.key')) {
+            if (config('ai.providers.groq.key') || config('ai.providers.anthropic.key') || config('ai.providers.openai.key') || config('ai.providers.gemini.key')) {
                 $response = (new ClauseExtractionAgent)->prompt(
                     "Interview transcript:\n\n{$transcript}"
                 );

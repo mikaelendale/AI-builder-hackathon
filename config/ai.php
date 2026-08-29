@@ -8,10 +8,10 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'default' => env('AI_DEFAULT_TEXT_PROVIDER', 'anthropic'),
+    'default' => env('AI_DEFAULT_TEXT_PROVIDER', 'groq'),
     'default_for_images' => env('AI_DEFAULT_IMAGE_PROVIDER', 'gemini'),
     'default_for_audio' => env('AI_DEFAULT_AUDIO_PROVIDER', 'openai'),
-    'default_for_transcription' => env('AI_DEFAULT_TRANSCRIPTION_PROVIDER', 'openai'),
+    'default_for_transcription' => env('AI_DEFAULT_TRANSCRIPTION_PROVIDER', 'groq'),
     'default_for_embeddings' => env('AI_DEFAULT_EMBEDDINGS_PROVIDER', 'openai'),
     'default_for_reranking' => env('AI_DEFAULT_RERANKING_PROVIDER', 'cohere'),
 

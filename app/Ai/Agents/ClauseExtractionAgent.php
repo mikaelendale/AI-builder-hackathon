@@ -13,8 +13,8 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Anthropic)]
-#[Model('claude-sonnet-5')]
+#[Provider(Lab::Groq)]
+#[Model('llama-3.3-70b-versatile')]
 #[Temperature(0.1)] // low temperature — extraction, not creative writing
 #[MaxTokens(2048)]
 class ClauseExtractionAgent implements Agent, HasStructuredOutput

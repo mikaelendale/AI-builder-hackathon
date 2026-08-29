@@ -162,6 +162,24 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                     </div>
                 </div>
 
+                {/* Persona Callout: Hiwot, 34, Monitoring Officer */}
+                <div className="p-3 bg-neutral-900/90 border border-neutral-800 rounded-xl flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 font-bold">
+                            Hiwot (34)
+                        </div>
+                        <div>
+                            <span className="font-semibold text-white">Monitoring Officer View:</span>
+                            <span className="text-neutral-300 ml-1">
+                                Files the 6-month sheet for 23 companies. Replaces unverified employer claims with direct beneficiary voice evidence that survives donor evaluation.
+                            </span>
+                        </div>
+                    </div>
+                    <Badge variant="outline" className="border-emerald-700 bg-emerald-950/40 text-emerald-300 text-[10px] whitespace-nowrap hidden sm:inline-flex">
+                        Donor-Defensible Audit Trail
+                    </Badge>
+                </div>
+
                 {/* Summary KPI Strip (Give Judges Numbers to Remember) */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                     <Card className="bg-neutral-900/80 border-neutral-800">
