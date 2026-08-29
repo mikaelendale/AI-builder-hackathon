@@ -262,6 +262,10 @@ class InterviewController extends Controller
         $extracted = $this->extractSignals($updatedTranscript);
         $verdicts = $this->ruleEngine->evaluate($interview, $extracted);
 
+        \Illuminate\Support\Facades\Log::info("[sequa-converse] Interview #{$interview->id} [lang={$lang}] Input: {$userText}");
+        \Illuminate\Support\Facades\Log::info("[sequa-extraction] Extracted signals: " . json_encode($extracted));
+        \Illuminate\Support\Facades\Log::info("[sequa-rule-engine] Computed verdicts: " . json_encode(array_map(fn ($v) => $v['status'], $verdicts)));
+
         // 4. Check Under-15 Hard Stop
         if (($verdicts['age_15_plus']['status'] ?? null) === 'not_met') {
             $interview->update([
@@ -494,19 +498,24 @@ class InterviewController extends Controller
         }
 
         // Boolean clauses
-        $childLaborSignal = (str_contains($lower, 'child labour') && !str_contains($lower, 'no child')) || str_contains($lower, 'underage') || str_contains($lower, 'started when 12')
+        $childLaborSignal = (str_contains($lower, 'child labour') && !str_contains($lower, 'no child'))
+            || (str_contains($lower, 'underage') && !str_contains($lower, 'no underage'))
+            || str_contains($lower, 'started when 12') || str_contains($lower, 'started at 13') || str_contains($lower, 'started at 14')
             ? 'Possible minor start'
             : 'No child labour indicators found';
         
-        $forcedLaborSignal = (str_contains($lower, 'forced') && !str_contains($lower, 'no forced')) || str_contains($lower, 'cannot leave') || str_contains($lower, 'locked')
+        $forcedLaborSignal = (str_contains($lower, 'forced') && !str_contains($lower, 'no forced') && !str_contains($lower, 'not forced'))
+            || str_contains($lower, 'cannot leave') || str_contains($lower, 'locked') || str_contains($lower, 'coerced')
             ? 'Forced conditions present'
             : 'Voluntary employment with freedom of movement';
 
-        $discriminationSignal = (str_contains($lower, 'discrim') && !str_contains($lower, 'no discrim')) || str_contains($lower, 'harass') || str_contains($lower, 'unequal')
+        $discriminationSignal = (str_contains($lower, 'discrim') && !str_contains($lower, 'no discrim'))
+            || (str_contains($lower, 'harass') && !str_contains($lower, 'no harass') && !str_contains($lower, 'no discrimination or harass'))
+            || (str_contains($lower, 'unequal') && !str_contains($lower, 'not unequal'))
             ? 'Discrimination reported'
             : 'Equal and fair treatment reported';
 
-        $associationSignal = str_contains($lower, 'not allowed to join') || str_contains($lower, 'banned') || str_contains($lower, 'no union')
+        $associationSignal = str_contains($lower, 'not allowed to join') || str_contains($lower, 'banned') || str_contains($lower, 'no union') || str_contains($lower, 'cannot join')
             ? 'Union/association denied'
             : 'Free to join workers group or union';
 

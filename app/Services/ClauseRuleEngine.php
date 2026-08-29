@@ -9,8 +9,8 @@ class ClauseRuleEngine
     /** Confidence below this forces `unclear` regardless of what was said. */
     public const CONFIDENCE_FLOOR = 0.55;
 
-    /** ETB legal minimum wage reference — set to 0 or unlegislated threshold */
-    public const MIN_WAGE_ETB_MONTHLY = 0;
+    /** ETB legal baseline minimum wage reference for entry-level compliance */
+    public const MIN_WAGE_ETB_MONTHLY = 1500;
 
     /** Clause to SDG mapping */
     private const SDG_MAPPING = [
@@ -73,8 +73,8 @@ class ClauseRuleEngine
 
         $signal = $topic['raw_signal'] ?? '';
 
-        // Weekly hours match (e.g. 40 hours per week, 25 hrs/wk)
-        if (preg_match('/\b(\d+)\s*(?:hour|hr)s?\s*(?:\/|\s*per\s*)?\s*(?:week|wk)/i', $signal, $m)) {
+        // Weekly hours match (e.g. 40 hours per week, 25 hrs/wk, 35 ሰዓት)
+        if (preg_match('/\b(\d+)\s*(?:hour|hr|ሰዓት)s?(?:\/|\s*per\s*|\s*በ|\s*a\s*)?\s*(?:week|wk|ሳምንት)?/iu', $signal, $m)) {
             $hoursPerWeek = (int) $m[1];
 
             return $hoursPerWeek >= 20
@@ -98,18 +98,22 @@ class ClauseRuleEngine
 
     private function evaluateWage(array $topic): array
     {
-        if ($this->belowConfidenceFloor($topic) || self::MIN_WAGE_ETB_MONTHLY === 0) {
-            return $this->unclear($topic, 'Wage figure or legal minimum reference not established.', 'min_wage');
+        if ($this->belowConfidenceFloor($topic)) {
+            return $this->unclear($topic, 'Wage figure not established — needs follow-up.', 'min_wage');
         }
 
         $signal = $topic['raw_signal'] ?? '';
 
-        if (preg_match('/(\d{2,6})\s*(etb|birr)/i', $signal, $m)) {
+        if (preg_match('/(\d{3,6})\s*(?:etb|birr|ብር)?/i', $signal, $m)) {
             $wage = (int) $m[1];
 
             return $wage >= self::MIN_WAGE_ETB_MONTHLY
-                ? $this->result('met', $topic, "Reported wage {$wage} ETB meets minimum wage threshold.", 'min_wage')
-                : $this->result('not_met', $topic, "Reported wage {$wage} ETB is below minimum wage threshold.", 'min_wage');
+                ? $this->result('met', $topic, "Reported wage {$wage} ETB meets minimum threshold.", 'min_wage')
+                : $this->result('not_met', $topic, "Reported wage {$wage} ETB is below the statutory baseline.", 'min_wage');
+        }
+
+        if (str_contains(strtolower($signal), 'cash') || str_contains($signal, 'ጥሬ ገንዘብ')) {
+            return $this->unclear($topic, 'Paid cash daily without stated monthly total — requires follow-up.', 'min_wage');
         }
 
         return $this->unclear($topic, 'Wage amount not clearly stated.', 'min_wage');
@@ -122,7 +126,14 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $violationKeywords = ['child labor', 'underage', 'started at 12', 'started at 13', 'started at 14', 'minor work'];
+        $cleanKeywords = ['no child', 'not child', 'no underage', 'adult', 'started as adult'];
+        foreach ($cleanKeywords as $kw) {
+            if (str_contains($signal, $kw)) {
+                return $this->result('met', $topic, 'No child labour indicators found.', 'no_child_labor');
+            }
+        }
+
+        $violationKeywords = ['minor start', 'child labor', 'child labour', 'underage', 'started when 12', 'started at 12', 'started at 13', 'started at 14', 'minor work'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Evidence of minor/child labour indicated.', 'no_child_labor');
@@ -139,7 +150,14 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $violationKeywords = ['forced', 'cannot leave', 'locked', 'coerced', 'threatened', 'withheld documents', 'trapped'];
+        $cleanKeywords = ['no forced', 'not forced', 'voluntary', 'freedom of movement', 'free to leave', 'free to work'];
+        foreach ($cleanKeywords as $kw) {
+            if (str_contains($signal, $kw)) {
+                return $this->result('met', $topic, 'Voluntary employment with freedom of movement.', 'no_forced_labor');
+            }
+        }
+
+        $violationKeywords = ['cannot leave', 'locked', 'coerced', 'threatened', 'withheld documents', 'trapped', 'forced conditions present'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Signal indicates forced or involuntary conditions.', 'no_forced_labor');
@@ -156,8 +174,7 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $violationKeywords = ['discrim', 'unequal pay', 'harass', 'unfair treatment', 'gender bias'];
-        $cleanKeywords = ['no discrimination', 'treated same', 'equal', 'fair', 'no problem', 'treated equally'];
+        $cleanKeywords = ['no discrimination', 'no harassment', 'no unequal', 'not discriminated', 'treated same', 'equal', 'fair', 'no problem', 'treated equally', 'face no discrimination'];
 
         foreach ($cleanKeywords as $kw) {
             if (str_contains($signal, $kw)) {
@@ -165,6 +182,7 @@ class ClauseRuleEngine
             }
         }
 
+        $violationKeywords = ['discrimination reported', 'unequal pay', 'unfair treatment', 'gender bias', 'harassment reported', 'harassed', 'discriminated'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Evidence of discrimination or harassment present.', 'no_discrimination');

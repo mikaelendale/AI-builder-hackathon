@@ -224,12 +224,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         const unclear = Object.values(verdicts).filter((v) => v.status === 'unclear').length;
         const notMet = Object.values(verdicts).filter((v) => v.status === 'not_met').length;
         const evaluated = met + unclear + notMet;
-        const percent = Math.round((evaluated / total) * 100);
+        const percent = Math.round((met / total) * 100);
 
         return { total, met, unclear, notMet, evaluated, percent };
     }, [verdicts]);
 
-    // ─── Audio Playback ───────────────────────────────────────
     const playAgentAudio = (audioUrl: string | null, fallbackText: string, onEnd?: () => void) => {
         setIsAgentSpeaking(true);
         if (activeAudioElementRef.current) {
@@ -261,7 +260,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
     };
 
-    // ─── Interview Initialization ─────────────────────────────
     const initializeInterview = async (personaKey: 'selam' | 'abel' | 'minor'): Promise<number> => {
         const p = PERSONA_SCRIPTS[personaKey];
         let target = beneficiaries.find((b) => b.persona_type === p.type);
@@ -294,22 +292,19 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         return data.interview_id;
     };
 
-    // ─── Snappy Microphone Capture with 1000ms VAD ────────────
     const startListeningTurn = async (interviewId: number) => {
         if (!liveCallActiveRef.current) return;
 
+        setIsListening(true);
+        setLiveInterimSpeech('');
         hasSpokenRef.current = false;
         interimTextRef.current = '';
-        setLiveInterimSpeech('');
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioChunksRef.current = [];
 
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                ? 'audio/webm;codecs=opus'
-                : 'audio/webm';
-            const mediaRecorder = new MediaRecorder(stream, { mimeType });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             mediaRecorderRef.current = mediaRecorder;
 
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -322,10 +317,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            const SPEECH_THRESHOLD = 10;
-            const SILENCE_TIMEOUT_MS = 1000; // Ultra-snappy 1.0s response
 
-            const updateVisualizer = () => {
+            const checkAudio = () => {
                 if (!analyserRef.current) return;
                 analyserRef.current.getByteFrequencyData(dataArray);
                 let sum = 0;
@@ -333,29 +326,25 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 const avg = sum / bufferLength;
                 setAudioVolumeLevel(Math.min(100, Math.round((avg / 128) * 100)));
 
-                if (avg > SPEECH_THRESHOLD) {
+                if (avg > 14) {
                     hasSpokenRef.current = true;
-                    if (silenceTimerRef.current) {
-                        clearTimeout(silenceTimerRef.current);
-                        silenceTimerRef.current = null;
-                    }
-                } else if (hasSpokenRef.current && !silenceTimerRef.current) {
+                    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                     silenceTimerRef.current = setTimeout(() => {
-                        stopAndSendTurn(interviewId);
-                    }, SILENCE_TIMEOUT_MS);
+                        if (hasSpokenRef.current && liveCallActiveRef.current) {
+                            stopAndSendTurn(interviewId);
+                        }
+                    }, 1000);
                 }
 
-                animFrameRef.current = requestAnimationFrame(updateVisualizer);
+                animFrameRef.current = requestAnimationFrame(checkAudio);
             };
-            updateVisualizer();
+            checkAudio();
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
             mediaRecorder.start(200);
-            setIsListening(true);
 
-            // Instant interim speech recognition
             const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             if (SpeechRec) {
                 try {
@@ -363,24 +352,25 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     rec.continuous = true;
                     rec.interimResults = true;
                     rec.lang = languageModeRef.current === 'am' ? 'am-ET' : 'en-US';
+
                     rec.onresult = (evt: any) => {
-                        let interim = '';
+                        let text = '';
                         for (let i = evt.resultIndex; i < evt.results.length; i++) {
-                            interim += evt.results[i][0].transcript;
+                            text += evt.results[i][0].transcript;
                         }
-                        if (interim) {
-                            interimTextRef.current = interim;
-                            setLiveInterimSpeech(interim);
+                        if (text) {
+                            interimTextRef.current = text;
+                            setLiveInterimSpeech(text);
                             hasSpokenRef.current = true;
                         }
                     };
-                    rec.onerror = () => {};
+
                     rec.start();
                     speechRecognitionRef.current = rec;
                 } catch (_) {}
             }
         } catch (err) {
-            console.warn('Microphone access error:', err);
+            console.warn('[sequa-voice] Mic permission error:', err);
             setIsListening(false);
         }
     };
@@ -394,33 +384,29 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
         }
-        analyserRef.current = null;
         setAudioVolumeLevel(0);
         setIsListening(false);
     };
 
-    // ─── Send Turn with Sub-Second Processing ─────────────────
-    const stopAndSendTurn = async (interviewId: number) => {
+    const stopAndSendTurn = async (interviewId: number, simulatedTranscript?: string) => {
         stopMicrophoneCapture();
         setIsProcessing(true);
-        const userSpokenText = interimTextRef.current;
-        setLiveInterimSpeech('');
 
+        const speechText = simulatedTranscript || interimTextRef.current || liveInterimSpeech;
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
-        if (audioBlob.size < 800 && !userSpokenText) {
-            setIsProcessing(false);
-            if (liveCallActiveRef.current) startListeningTurn(interviewId);
-            return;
+        if (speechText) {
+            setChatTurns((prev) => [...prev, { sender: 'worker', text: speechText, timestamp: 'Now' }]);
         }
+        setLiveInterimSpeech('');
 
         try {
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'speech.webm');
+            formData.append('audio', audioBlob, 'turn.webm');
             formData.append('language', languageModeRef.current);
-            if (userSpokenText) {
-                formData.append('transcript', userSpokenText);
-                formData.append('interim_text', userSpokenText);
+            if (speechText) {
+                formData.append('transcript', speechText);
+                formData.append('interim_text', speechText);
             }
 
             const res = await fetch(`/interviews/${interviewId}/converse`, {
@@ -430,72 +416,61 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             });
 
             const data = await res.json();
+            console.log('[sequa-voice] Converse response:', data);
 
-            if (data.retry || data.error) {
-                setChatTurns((prev) => [
-                    ...prev,
-                    { sender: 'agent', text: data.agent_text, audioUrl: data.audio_url, timestamp: 'Now' },
-                ]);
-                playAgentAudio(data.audio_url, data.agent_text, () => {
-                    if (liveCallActiveRef.current) startListeningTurn(interviewId);
-                });
-                return;
+            if (data.verdicts) {
+                console.log('[sequa-verdicts] Updated verdicts:', data.verdicts);
+                setVerdicts(data.verdicts);
+            }
+            if (data.follow_ups) {
+                console.log('[sequa-followup] Follow-up probes:', data.follow_ups);
+                setFollowUps(data.follow_ups);
+            }
+            if (data.stopped) {
+                setStoppedHardCase(true);
+                setHardCaseDetail(data.agent_text);
+                liveCallActiveRef.current = false;
+                setIsLiveCallActive(false);
             }
 
-            if (data.user_text) {
-                setChatTurns((prev) => [
-                    ...prev,
-                    { sender: 'worker', text: data.user_text, timestamp: 'Just now' },
-                    { sender: 'agent', text: data.agent_text, audioUrl: data.audio_url, timestamp: 'Now' },
-                ]);
+            const agentReply = data.agent_text || (languageModeRef.current === 'am' ? 'እናመሰግናለን።' : 'Thank you.');
+            setChatTurns((prev) => [
+                ...prev,
+                { sender: 'agent', text: agentReply, audioUrl: data.audio_url, timestamp: 'Now' },
+            ]);
 
-                if (data.verdicts) setVerdicts((prev) => ({ ...prev, ...data.verdicts }));
-                if (data.follow_ups) setFollowUps(data.follow_ups);
-
-                if (data.stopped) {
-                    setStoppedHardCase(true);
-                    setHardCaseDetail(data.agent_text);
-                    liveCallActiveRef.current = false;
-                    setIsLiveCallActive(false);
-                    playAgentAudio(data.audio_url, data.agent_text);
-                    return;
+            playAgentAudio(data.audio_url, agentReply, () => {
+                if (liveCallActiveRef.current && !data.is_complete && !data.stopped) {
+                    startListeningTurn(interviewId);
                 }
-
-                playAgentAudio(data.audio_url, data.agent_text, () => {
-                    if (liveCallActiveRef.current && !data.is_complete) {
-                        startListeningTurn(interviewId);
-                    }
-                });
-            }
+            });
         } catch (err) {
-            console.error('Conversational turn error:', err);
-            if (liveCallActiveRef.current) startListeningTurn(interviewId);
+            console.error('[sequa-voice] Error sending turn:', err);
         } finally {
             setIsProcessing(false);
         }
     };
 
-    // Quick Manual Send
     const handleManualSend = () => {
-        if (!currentInterviewIdRef.current) return;
-        stopAndSendTurn(currentInterviewIdRef.current);
+        if (currentInterviewIdRef.current) {
+            stopAndSendTurn(currentInterviewIdRef.current);
+        }
     };
 
-    // ─── Start / End Live Call ─────────────────────────────────
     const startLiveCall = async () => {
-        liveCallActiveRef.current = true;
-        setIsLiveCallActive(true);
-        setStoppedHardCase(false);
-        setHardCaseDetail(null);
-
         let intId = currentInterviewIdRef.current;
         if (!intId) {
             if (selectedPersona === 'custom') {
                 intId = await initializeCustomInterview();
             } else {
-                intId = await initializeInterview(languageModeRef.current === 'am' ? 'abel' : 'selam');
+                intId = await initializeInterview(selectedPersona);
             }
         }
+
+        liveCallActiveRef.current = true;
+        setIsLiveCallActive(true);
+        setStoppedHardCase(false);
+        setHardCaseDetail(null);
 
         const greeting = languageModeRef.current === 'am'
             ? 'ጤና ይስጥልኝ። የሴኳ ፕሮግራም የሥራ ማረጋገጫ ረዳት ነኝ። እባክዎን ስምዎን፣ ዕድሜዎን እና የሥራ ሁኔታዎን ይንገሩኝ።'
@@ -530,13 +505,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         stopMicrophoneCapture();
     };
 
-    // ─── Language Switcher Tab Handler ────────────────────────
     const handleLanguageChange = (lang: 'en' | 'am') => {
         setLanguageMode(lang);
         languageModeRef.current = lang;
     };
 
-    // ─── Stage Demo Trigger (1-click scripted) ────────────────
     const handleTriggerPersonaDemo = async (personaKey: 'selam' | 'abel' | 'minor') => {
         endLiveCall();
         setSelectedPersona(personaKey);
@@ -547,6 +520,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         const reset: Record<string, ClauseVerdict> = {};
         Object.keys(CLAUSE_DEFINITIONS).forEach((k) => { reset[k] = { status: 'pending', confidence: 0 }; });
         setVerdicts(reset);
+        setFollowUps([]);
 
         const intId = await initializeInterview(personaKey);
         setChatTurns([{ sender: 'worker', text: p.script, timestamp: 'Now' }]);
@@ -559,6 +533,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 body: JSON.stringify({ transcript: p.script, language: p.lang }),
             });
             const data = await res.json();
+            console.log('[sequa-persona] Script evaluated:', data);
 
             if (data.verdicts) setVerdicts(data.verdicts);
             if (data.follow_ups) setFollowUps(data.follow_ups);
@@ -576,7 +551,35 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
     };
 
-    // ─── Start Custom / Live Persona Call ─────────────────────
+    const handleSendFollowUpAnswer = async (answerText: string) => {
+        if (!currentInterviewIdRef.current) return;
+        setIsProcessing(true);
+        setChatTurns((prev) => [...prev, { sender: 'worker', text: answerText, timestamp: 'Now' }]);
+
+        try {
+            const res = await fetch(`/interviews/${currentInterviewIdRef.current}/converse`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                body: JSON.stringify({ transcript: answerText, language: languageModeRef.current }),
+            });
+            const data = await res.json();
+            console.log('[sequa-followup-answer] Response:', data);
+
+            if (data.verdicts) setVerdicts(data.verdicts);
+            if (data.follow_ups) setFollowUps(data.follow_ups);
+
+            setChatTurns((prev) => [
+                ...prev,
+                { sender: 'agent', text: data.agent_text, audioUrl: data.audio_url, timestamp: 'Now' },
+            ]);
+            playAgentAudio(data.audio_url, data.agent_text);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleStartCustomCall = async () => {
         endLiveCall();
         setSelectedPersona('custom');
@@ -584,6 +587,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         const reset: Record<string, ClauseVerdict> = {};
         Object.keys(CLAUSE_DEFINITIONS).forEach((k) => { reset[k] = { status: 'pending', confidence: 0 }; });
         setVerdicts(reset);
+        setFollowUps([]);
         setStoppedHardCase(false);
         setHardCaseDetail(null);
         setChatTurns([]);
@@ -593,7 +597,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         await startLiveCall();
     };
 
-    // Save and Complete
     const handleCompleteInterview = async () => {
         if (!currentInterviewIdRef.current) return;
         try {
@@ -610,23 +613,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         } catch (err) { console.error(err); }
     };
 
-    // Orb State Determination
-    const orbStatus = isProcessing
-        ? 'processing'
-        : isAgentSpeaking
-          ? 'speaking'
-          : isListening
-            ? 'listening'
-            : isLiveCallActive
-              ? 'active'
-              : 'idle';
-
     return (
         <>
             <Head title="Beneficiary Voice Verification — sequa Audit" />
 
             <div className="min-h-screen bg-background text-foreground py-2 sm:py-4 px-2 flex flex-col items-center justify-start transition-colors duration-200">
-                {/* Global Navigation Strip */}
                 <div className="w-full max-w-[380px] mb-2 flex items-center justify-between px-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-2 font-medium">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -634,7 +625,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {/* iPhone Finish Selector */}
                         <div className="flex items-center gap-1 p-0.5 bg-muted rounded-full border border-border">
                             {(['titanium', 'purple', 'orange', 'white', 'cherry'] as const).map((v) => (
                                 <button
@@ -659,22 +649,18 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     </div>
                 </div>
 
-                {/* iPhone 15 Pro Frame */}
-                <PhoneMockupCard variant={phoneVariant} showDynamicIsland={true} className="w-full max-w-[380px] h-[780px] max-h-[calc(100vh-60px)] shadow-xl">
+                <PhoneMockupCard variant={phoneVariant} showDynamicIsland={true} className="w-full max-w-[380px] h-[750px] max-h-[calc(100vh-45px)] shadow-xl">
                     <div className="flex flex-col h-full bg-background text-foreground overflow-hidden relative select-none">
                         
-                        {/* Status Bar with Dynamic Island Clearance */}
-                        <div className="w-full h-10 pt-2.5 px-6 flex items-center justify-between text-[11px] font-semibold text-muted-foreground z-20 pointer-events-none select-none">
+                        <div className="w-full h-10 pt-2.5 px-6 shrink-0 flex items-center justify-between text-[11px] font-semibold text-muted-foreground z-20 pointer-events-none select-none">
                             <span>9:41</span>
-                            {/* Middle space is cleared for Dynamic Island (w-24) */}
                             <div className="flex items-center gap-1.5 text-[10px]">
                                 <span>5G</span>
                                 <span>100%</span>
                             </div>
                         </div>
 
-                        {/* App Header with Language Segmented Tab */}
-                        <div className="px-3.5 py-2 bg-card/90 backdrop-blur-sm border-b border-border flex items-center justify-between gap-2 z-10">
+                        <div className="px-3.5 py-2 shrink-0 bg-card/90 backdrop-blur-sm border-b border-border flex items-center justify-between gap-2 z-10">
                             <div>
                                 <div className="text-xs font-bold tracking-tight text-foreground">
                                     Voice Audit
@@ -684,7 +670,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 </div>
                             </div>
 
-                            {/* Segmented Tab: English / Amharic */}
                             <div className="flex p-0.5 rounded-lg bg-muted border border-border">
                                 <button
                                     type="button"
@@ -720,8 +705,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             </Button>
                         </div>
 
-                        {/* Statutory Verification Progress Bar */}
-                        <div className="px-3.5 py-1.5 bg-muted/40 border-b border-border flex flex-col gap-1">
+                        <div className="px-3.5 py-1.5 shrink-0 bg-muted/30 border-b border-border flex flex-col gap-1">
                             <div className="flex items-center justify-between text-[10px]">
                                 <span className="font-medium text-muted-foreground">
                                     Statutory Criteria
@@ -731,7 +715,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 </span>
                             </div>
 
-                            {/* Segment Progress Bar */}
                             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
                                 <div
                                     className="bg-emerald-500 h-full transition-all duration-300 ease-out"
@@ -748,16 +731,15 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             </div>
                         </div>
 
-                        {/* Persona Selector Chips */}
-                        <div className="px-3 py-1.5 bg-card/60 border-b border-border">
+                        <div className="px-3 py-1.5 shrink-0 bg-card/60 border-b border-border">
                             <div className="grid grid-cols-4 gap-1">
                                 <button
                                     type="button"
                                     onClick={() => handleTriggerPersonaDemo('selam')}
                                     className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
                                         selectedPersona === 'selam'
-                                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold'
-                                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
+                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
                                     }`}
                                 >
                                     <div className="truncate font-semibold">Selam</div>
@@ -769,8 +751,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     onClick={() => handleTriggerPersonaDemo('abel')}
                                     className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
                                         selectedPersona === 'abel'
-                                            ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold'
-                                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
+                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
                                     }`}
                                 >
                                     <div className="truncate font-semibold">Abel</div>
@@ -782,8 +764,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     onClick={() => handleTriggerPersonaDemo('minor')}
                                     className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
                                         selectedPersona === 'minor'
-                                            ? 'border-destructive bg-destructive/10 text-destructive font-bold'
-                                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
+                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
                                     }`}
                                 >
                                     <div className="truncate font-semibold">Minor</div>
@@ -795,8 +777,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     onClick={() => handleStartCustomCall()}
                                     className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
                                         selectedPersona === 'custom'
-                                            ? 'border-primary bg-primary/10 text-primary font-bold'
-                                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
+                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
                                     }`}
                                 >
                                     <div className="truncate font-semibold">You</div>
@@ -805,15 +787,14 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             </div>
                         </div>
 
-                        {/* Semantic Voice Visualizer Disc */}
-                        <div className="py-2.5 px-3 flex items-center justify-between bg-card/40 border-b border-border">
+                        <div className="py-2 px-3 shrink-0 flex items-center justify-between bg-card/40 border-b border-border">
                             <div className="flex items-center gap-2.5">
                                 <button
                                     type="button"
                                     onClick={isListening ? handleManualSend : startLiveCall}
-                                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                                         isListening
-                                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30'
+                                            ? 'bg-emerald-600 text-white shadow-xs'
                                             : isAgentSpeaking
                                               ? 'bg-primary text-primary-foreground'
                                               : isProcessing
@@ -822,13 +803,13 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     }`}
                                 >
                                     {isProcessing ? (
-                                        <RefreshCcw className="w-4 h-4 animate-spin" />
+                                        <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
                                     ) : isAgentSpeaking ? (
-                                        <Volume2 className="w-4 h-4" />
+                                        <Volume2 className="w-3.5 h-3.5" />
                                     ) : isListening ? (
-                                        <Mic className="w-4 h-4" />
+                                        <Mic className="w-3.5 h-3.5" />
                                     ) : (
-                                        <PhoneCall className="w-4 h-4" />
+                                        <PhoneCall className="w-3.5 h-3.5" />
                                     )}
                                 </button>
 
@@ -837,11 +818,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         {isListening
                                             ? 'Listening for worker speech...'
                                             : isAgentSpeaking
-                                              ? 'AI Auditor speaking'
+                                              ? 'AI Auditor speaking...'
                                               : isProcessing
                                                 ? 'Evaluating statutory clauses...'
                                                 : isLiveCallActive
-                                                  ? 'Call Connected'
+                                                  ? 'Call Active'
                                                   : 'Ready to verify'}
                                     </div>
                                     <div className="text-[9px] text-muted-foreground">
@@ -850,7 +831,6 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 </div>
                             </div>
 
-                            {/* Soundwave bars (active when listening) */}
                             {isListening && (
                                 <div className="flex items-center gap-0.5 h-3">
                                     {[1, 2, 3, 4, 5].map((b) => (
@@ -866,10 +846,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             )}
                         </div>
 
-                        {/* Main Scrollable Transcript & Checklist Area */}
-                        <div className="flex-1 p-3 space-y-2 overflow-y-auto min-h-0">
+                        <div className="flex-1 p-3 space-y-2.5 overflow-y-auto min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                             
-                            {/* Hard Stop Alert */}
                             {stoppedHardCase && (
                                 <Alert className="border-destructive/30 bg-destructive/10 text-destructive p-2.5 rounded-lg">
                                     <AlertTitle className="text-xs font-bold">
@@ -881,12 +859,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 </Alert>
                             )}
 
-                            {/* Chat Conversation Turns */}
                             <div className="space-y-2">
                                 {chatTurns.length === 0 && !isLiveCallActive && (
                                     <div className="text-center py-6 text-muted-foreground text-xs space-y-1.5">
                                         <p className="font-semibold text-foreground">Ready for Audit</p>
-                                        <p className="text-[11px]">Select a persona above or tap the phone button to start.</p>
+                                        <p className="text-[11px]">Select a persona above or tap start to begin.</p>
                                     </div>
                                 )}
 
@@ -910,7 +887,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                 <button
                                                     type="button"
                                                     onClick={() => playAgentAudio(turn.audioUrl!, turn.text)}
-                                                    className="mt-1 text-[9px] flex items-center gap-1 opacity-80 hover:opacity-100 underline text-emerald-600 dark:text-emerald-400"
+                                                    className="mt-1 text-[9px] flex items-center gap-1 opacity-80 hover:opacity-100 underline text-muted-foreground hover:text-foreground"
                                                 >
                                                     <Volume2 className="w-3 h-3" /> Replay Voice
                                                 </button>
@@ -919,7 +896,18 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     </div>
                                 ))}
 
-                                {/* Live Interim Speech */}
+                                {followUps.length > 0 && selectedPersona === 'abel' && (
+                                    <div className="pt-1 flex justify-center">
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleSendFollowUpAnswer(PERSONA_SCRIPTS.abel.followUpAnswer)}
+                                            className="h-8 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg flex items-center gap-1.5 shadow-xs"
+                                        >
+                                            <span>💬</span> Clarify Abel's Hours (35 hrs/wk)
+                                        </Button>
+                                    </div>
+                                )}
+
                                 {liveInterimSpeech && (
                                     <div className="flex flex-col items-end">
                                         <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase">
@@ -931,10 +919,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     </div>
                                 )}
 
-                                {/* Processing status */}
                                 {isProcessing && (
                                     <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-lg text-[11px] text-muted-foreground border border-border">
-                                        <RefreshCcw className="w-3 h-3 animate-spin text-primary" />
+                                        <RefreshCcw className="w-3 h-3 animate-spin text-foreground" />
                                         <span>
                                             {languageMode === 'am'
                                                 ? 'ማረጋገጫዎች እየተገመገሙ ነው...'
@@ -946,13 +933,12 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div ref={chatBottomRef} />
                             </div>
 
-                            {/* Statutory Clause Checklist */}
-                            <div className="pt-2 border-t border-border space-y-1">
+                            <div className="pt-2 border-t border-border space-y-1.5">
                                 <div
                                     onClick={() => setShowClauseDetails(!showClauseDetails)}
                                     className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground py-0.5"
                                 >
-                                    <span>7 Statutory Clauses</span>
+                                    <span>7 Statutory Clauses ({progressStats.met}/{progressStats.total})</span>
                                     <span className="flex items-center gap-0.5 text-foreground">
                                         {showClauseDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                     </span>
@@ -966,38 +952,29 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         return (
                                             <div
                                                 key={key}
-                                                className={`p-1.5 rounded-md border flex items-center justify-between text-xs transition-colors ${
-                                                    status === 'met'
-                                                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-900 dark:text-emerald-200'
-                                                        : status === 'not_met'
-                                                          ? 'border-destructive/30 bg-destructive/5 text-destructive'
-                                                          : status === 'unclear'
-                                                            ? 'border-amber-500/30 bg-amber-500/5 text-amber-900 dark:text-amber-200'
-                                                            : 'border-border bg-card/30 text-muted-foreground'
-                                                }`}
+                                                className="p-1.5 rounded-lg border border-border/70 bg-card/60 flex items-center justify-between text-xs transition-colors hover:bg-muted/30"
                                             >
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-[11px]">{def.short}</span>
+                                                    <span className="font-medium text-[11px] text-foreground">{def.short}</span>
                                                     {showClauseDetails && verdict?.evidence_quote && (
                                                         <span className="text-[9px] text-muted-foreground line-clamp-1">
                                                             "{verdict.evidence_quote}"
                                                         </span>
                                                     )}
                                                 </div>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={`text-[8px] uppercase font-bold py-0 px-1.5 h-4 ${
+                                                <span
+                                                    className={`text-[9px] font-mono uppercase font-semibold py-0.5 px-1.5 rounded-full border ${
                                                         status === 'met'
-                                                            ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
+                                                            ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
                                                             : status === 'not_met'
-                                                              ? 'border-destructive/40 text-destructive bg-destructive/10'
+                                                              ? 'border-destructive/30 text-destructive bg-destructive/10'
                                                               : status === 'unclear'
-                                                                ? 'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10'
-                                                                : 'border-border text-muted-foreground'
+                                                                ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+                                                                : 'border-border text-muted-foreground bg-muted'
                                                     }`}
                                                 >
                                                     {status}
-                                                </Badge>
+                                                </span>
                                             </div>
                                         );
                                     })}
@@ -1005,14 +982,13 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             </div>
                         </div>
 
-                        {/* Docked Action Bar */}
-                        <div className="p-2.5 pb-4 bg-card/95 backdrop-blur-md border-t border-border flex items-center justify-between gap-2 z-10">
+                        <div className="shrink-0 pt-2.5 pb-8 px-3.5 bg-card/98 backdrop-blur-md border-t border-border flex items-center justify-between gap-2 z-20 shadow-lg">
                             {isLiveCallActive ? (
                                 <div className="flex items-center gap-2 w-full">
                                     {isListening && (
                                         <Button
                                             onClick={handleManualSend}
-                                            className="flex-1 h-9 bg-primary text-primary-foreground font-semibold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5"
+                                            className="flex-1 h-10 bg-primary text-primary-foreground font-semibold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5"
                                         >
                                             <Send className="w-3.5 h-3.5" /> Tap to Send
                                         </Button>
@@ -1020,7 +996,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     <Button
                                         onClick={endLiveCall}
                                         variant="destructive"
-                                        className={`${isListening ? 'w-9 px-0' : 'flex-1'} h-9 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5`}
+                                        className={`${isListening ? 'w-10 px-0' : 'flex-1'} h-10 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5`}
                                     >
                                         <PhoneOff className="w-4 h-4" />
                                         {!isListening && 'End Call'}
@@ -1030,7 +1006,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div className="flex items-center gap-2 w-full">
                                     <Button
                                         onClick={startLiveCall}
-                                        className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5"
+                                        className="flex-1 h-10 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5"
                                     >
                                         <PhoneCall className="w-3.5 h-3.5" /> Start Live Voice Call
                                     </Button>
@@ -1038,7 +1014,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         onClick={handleCompleteInterview}
                                         disabled={stoppedHardCase}
                                         variant="outline"
-                                        className="h-9 px-3 text-xs font-semibold rounded-lg border-border"
+                                        className="h-10 px-3.5 text-xs font-semibold rounded-xl border-border bg-card hover:bg-muted text-foreground"
                                     >
                                         Save →
                                     </Button>
