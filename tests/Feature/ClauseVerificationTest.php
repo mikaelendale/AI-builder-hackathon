@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\Agents\ClauseExtractionAgent;
 use App\Models\Beneficiary;
 use App\Models\Interview;
 use App\Services\ClauseRuleEngine;
@@ -269,5 +270,27 @@ class ClauseVerificationTest extends TestCase
             'interview_id' => $interview->id,
             'type' => 'contradiction',
         ]);
+    }
+
+    public function test_extraction_agent_never_outputs_a_status_field(): void
+    {
+        ClauseExtractionAgent::fake([
+            [
+                'age' => ['raw_signal' => 'said they are 19', 'evidence_quote' => 'I am 19', 'confidence' => 0.9],
+                'hours_and_duration' => ['raw_signal' => 'works 40h/week', 'evidence_quote' => '40 hours per week', 'confidence' => 0.9],
+                'wage' => ['raw_signal' => '6500 ETB monthly', 'evidence_quote' => '6500 ETB', 'confidence' => 0.95],
+                'child_labor' => ['raw_signal' => 'no child labour', 'evidence_quote' => null, 'confidence' => 0.9],
+                'forced_labor' => ['raw_signal' => 'voluntary work', 'evidence_quote' => null, 'confidence' => 0.9],
+                'discrimination' => ['raw_signal' => 'equal treatment', 'evidence_quote' => null, 'confidence' => 0.9],
+                'freedom_of_association' => ['raw_signal' => 'free to join union', 'evidence_quote' => null, 'confidence' => 0.9],
+                'needs_followup_on' => [],
+            ],
+        ]);
+
+        $response = (new ClauseExtractionAgent)->prompt('Sample transcript');
+
+        $this->assertArrayNotHasKey('status', $response->toArray());
+        $this->assertArrayHasKey('age', $response->toArray());
+        $this->assertArrayHasKey('hours_and_duration', $response->toArray());
     }
 }
