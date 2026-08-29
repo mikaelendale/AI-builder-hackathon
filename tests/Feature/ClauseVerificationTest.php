@@ -208,4 +208,66 @@ class ClauseVerificationTest extends TestCase
         ]);
         $translateRes->assertOk();
     }
+
+    public function test_consent_refusal_creates_refusal_flag_and_sets_clauses_unclear(): void
+    {
+        $beneficiary = Beneficiary::create([
+            'name' => 'Refusing Beneficiary',
+            'persona_type' => 'synthetic',
+            'phone_type' => 'feature_phone',
+            'language' => 'am',
+        ]);
+
+        $response = $this->postJson("/beneficiaries/{$beneficiary->id}/interviews", [
+            'consent_given' => false,
+        ]);
+
+        $response->assertOk();
+        $interviewId = $response->json('interview_id');
+
+        $this->assertDatabaseHas('hard_case_flags', [
+            'interview_id' => $interviewId,
+            'type' => 'refusal',
+        ]);
+
+        $this->assertDatabaseCount('clause_assessments', 7);
+        $this->assertDatabaseHas('clause_assessments', [
+            'interview_id' => $interviewId,
+            'status' => 'unclear',
+        ]);
+    }
+
+    public function test_contradiction_creates_hard_case_flag(): void
+    {
+        $beneficiary = Beneficiary::create([
+            'name' => 'Contradiction Case',
+            'persona_type' => 'synthetic',
+            'phone_type' => 'smartphone',
+            'language' => 'en',
+        ]);
+
+        $interview = Interview::create([
+            'beneficiary_id' => $beneficiary->id,
+            'status' => 'completed',
+            'consent_given' => true,
+        ]);
+
+        // Failed clause
+        $interview->clauseAssessments()->create([
+            'clause_key' => 'hours_threshold',
+            'status' => 'not_met',
+            'confidence' => 0.95,
+        ]);
+
+        $aggregator = app(SheetAggregator::class);
+        $aggregator->aggregate($interview, [
+            'employer_reported_value' => 1,
+            'worker_reported_value' => 0,
+        ]);
+
+        $this->assertDatabaseHas('hard_case_flags', [
+            'interview_id' => $interview->id,
+            'type' => 'contradiction',
+        ]);
+    }
 }

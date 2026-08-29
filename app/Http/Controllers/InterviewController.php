@@ -45,12 +45,35 @@ class InterviewController extends Controller
 
     public function start(Request $request, Beneficiary $beneficiary): JsonResponse
     {
+        $consentGiven = $request->boolean('consent_given', true);
+
         $interview = Interview::create([
             'beneficiary_id' => $beneficiary->id,
             'status' => 'in_progress',
-            'consent_given' => $request->boolean('consent_given', true),
+            'consent_given' => $consentGiven,
             'started_at' => now(),
         ]);
+
+        if (! $consentGiven) {
+            HardCaseFlag::create([
+                'interview_id' => $interview->id,
+                'type' => 'refusal',
+                'detail' => 'Beneficiary refused verbal consent for interview assessment.',
+                'resolved_action' => 'Clauses marked unclear. Excluded from positive employment totals.',
+            ]);
+
+            // Populate all 7 clauses as unclear (never silent null)
+            $clauses = ['age_15_plus', 'hours_threshold', 'min_wage', 'no_child_labor', 'no_forced_labor', 'no_discrimination', 'freedom_of_association'];
+            foreach ($clauses as $clauseKey) {
+                ClauseAssessment::create([
+                    'interview_id' => $interview->id,
+                    'clause_key' => $clauseKey,
+                    'status' => 'unclear',
+                    'confidence' => 0.0,
+                    'evidence_quote' => 'Verbal consent refused by beneficiary.',
+                ]);
+            }
+        }
 
         return response()->json([
             'interview_id' => $interview->id,

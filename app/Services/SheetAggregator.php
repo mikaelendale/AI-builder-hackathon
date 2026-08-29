@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\HardCaseFlag;
 use App\Models\Interview;
 use App\Models\SheetRow;
 
@@ -24,6 +25,20 @@ class SheetAggregator
             ?? ($isGoodJob ? 1 : 0);
 
         $hasDiscrepancy = $employerReported !== $workerReported;
+
+        // Log contradiction to hard_case_flags if employer claims good job but worker reality disagrees
+        if ($hasDiscrepancy) {
+            HardCaseFlag::firstOrCreate(
+                [
+                    'interview_id' => $interview->id,
+                    'type' => 'contradiction',
+                ],
+                [
+                    'detail' => "Employer self-reported good job (1) contradicts independent worker assessment ({$workerReported}).",
+                    'resolved_action' => 'Pending Monitoring Officer field investigation.',
+                ]
+            );
+        }
 
         return SheetRow::updateOrCreate(
             ['interview_id' => $interview->id],
