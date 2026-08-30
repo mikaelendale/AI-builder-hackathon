@@ -1,4 +1,4 @@
-# "Ask the People the Programme Is For" — Beneficiary Verification Platform
+# "Ask the People the Programme Is For" — Beneficiary Voice Verification Platform
 ### AI Builder Hackathon Addis Ababa, 29–30 Aug 2026 · Challenge 3 (sequa Ethiopia)
 
 [![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?style=for-the-badge&logo=laravel)](https://laravel.com)
@@ -6,111 +6,206 @@
 [![Inertia.js](https://img.shields.io/badge/Inertia.js-v2-9553E9?style=for-the-badge&logo=inertia)](https://inertiajs.com)
 [![Tailwind CSS 4](https://img.shields.io/badge/Tailwind-v4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/Tests-64%20Passed%20(270%20assertions)-emerald?style=for-the-badge&logo=checkmarx)](https://phpunit.de/)
 
 ---
 
-## 1. Executive Summary & Problem
+## 1. Executive Summary & Problem Statement
 
-Job-creation programmes currently report "good jobs created" every six months using an employer-filled monitoring sheet: headcount, gender, age band, average monthly salary, training participation, and seven improvement criteria. **Nobody ever asks the worker.**
+Development programmes in Ethiopia report "Good Jobs Created" every six months via employer-filled spreadsheets: headcount, gender, age band, average monthly salary, training participation, and improvement criteria. **Nobody ever asks the workers themselves.**
 
-A "good job" is defined under strict statutory guidelines:
-- **Age 15 or older** (`age_15_plus`)
-- **Formal or informal work**
-- **20 hours/week over 26 weeks, OR 520 hours/year** (`hours_threshold`)
-- **At least the legally established minimum wage** (`min_wage`)
-- **No child labour** (`no_child_labor`)
-- **No forced labour or coercion** (`no_forced_labor`)
-- **No discrimination or harassment** (`no_discrimination`)
-- **Freedom of association & union representation** (`freedom_of_association`)
+A statutory **"Good Job"** under Ethiopian labour proclamation and international development guidelines requires meeting **7 statutory criteria**:
+1. **Age 15+ Threshold** (`age_15_plus`): Worker verified $\ge$ 15 years old.
+2. **Duration & Intensity** (`hours_threshold`): $\ge$ 20 hours/week over 26 weeks, OR 520 hours/year.
+3. **Minimum Wage** (`min_wage`): Payment meets or exceeds statutory baseline ($\ge$ 1,500 ETB/month).
+4. **Zero Child Labour** (`no_child_labor`): Full compliance with ILO Conventions 138 & 182.
+5. **No Forced Labour / Coercion** (`no_forced_labor`): Voluntary employment with freedom of movement.
+6. **Non-Discrimination & Equal Pay** (`no_discrimination`): Equal pay for equal work, fair treatment across genders.
+7. **Freedom of Association** (`freedom_of_association`): Right to join workplace committees and unions.
 
-For daily and seasonal workers, the clause counts only above 6 months of continuous employment, confirmed *"either by employer or worker"* — a rule that exists in programme guidelines but was impossible to enforce at scale.
+For daily and seasonal workers, the guidelines state that employment must be confirmed *"either by employer or worker"* — a rule that was previously impossible to enforce at scale.
 
-**This platform opens that door.**
+**This platform solves that problem through automated, multi-lingual, multi-agent voice audits.**
 
 ---
 
-## 2. Core Architecture: The Extraction / Verdict Split
+## 2. Multi-Agent Architecture: Separation of Extraction & Verdict
+
+The system enforces a strict architectural boundary: **AI extracts claims and source quotes; plain deterministic PHP applies statutory rules.**
 
 ```
-                         ┌─────────────────────────────────────────┐
-                         │   Spoken Audio / Transcript (EN / AM)   │
-                         └────────────────────┬────────────────────┘
-                                              │
-                                              ▼
-                         ┌─────────────────────────────────────────┐
-                         │       ClauseExtractionAgent (LLM)       │
-                         │  Extracts raw_signal, evidence_quote,   │
-                         │  and confidence ONLY. NEVER verdicts.   │
-                         └────────────────────┬────────────────────┘
-                                              │
-                                              ▼
-                         ┌─────────────────────────────────────────┐
-                         │     ClauseRuleEngine (Plain PHP)        │
-                         │  Deterministic statutory rule engine.   │
-                         │  Forces UNCLEAR if confidence < 0.55.   │
-                         │  Hard-stops if age < 15 detected.       │
-                         └────────────────────┬────────────────────┘
-                                              │
-                     ┌────────────────────────┴────────────────────────┐
-                     │                                                 │
-                     ▼                                                 ▼
-        ┌─────────────────────────┐                       ┌─────────────────────────┐
-        │  Live Phone Interview   │                       │  Monitoring Dashboard   │
-        │  (Screen A — 390px)     │                       │  (Screen B — Hiwot's)   │
-        │  - Streaming transcript │                       │  - Employer vs Worker   │
-        │  - Real-time clause card│                       │  - Discrepancy flags    │
-        │  - Follow-up probes     │                       │  - 23+ seeded records   │
-        │  - Under-15 hard stop   │                       │  - Verbatim audit trail │
-        └─────────────────────────┘                       └─────────────────────────┘
+                               ┌────────────────────────────────────────────────────────┐
+                               │   Spoken Audio / Transcript (EN / አማርኛ / Afaan Oromoo) │
+                               └───────────────────────────┬────────────────────────────┘
+                                                           │
+                                                           ▼
+                               ┌────────────────────────────────────────────────────────┐
+                               │             InterviewSupervisorAgent (LLM)             │
+                               │        Coordinates 2 specialist sub-agents in parallel │
+                               └─────────────┬────────────────────────────┬─────────────┘
+                                             │                            │
+                                             ▼                            ▼
+                 ┌──────────────────────────────────────┐     ┌──────────────────────────────────────┐
+                 │       EmploymentFactsAgent (LLM)     │     │     RightsProtectionsAgent (LLM)     │
+                 │   Extracts age, hours, wage metrics  │     │   Extracts child labor, forced labor,│
+                 │   with raw signals & source quotes   │     │   discrimination, association rights │
+                 └───────────────────┬──────────────────┘     └───────────────────┬──────────────────┘
+                                     │                                            │
+                                     └─────────────────────┬──────────────────────┘
+                                                           │
+                                                           ▼
+                               ┌────────────────────────────────────────────────────────┐
+                               │             ExtractionVerifierAgent (Critic)           │
+                               │   Temperature=0 fact-check against raw transcript text.│
+                               │   Flags hallucinations; drops confidence on mismatch.  │
+                               └───────────────────────────┬────────────────────────────┘
+                                                           │
+                                                           ▼
+                               ┌────────────────────────────────────────────────────────┐
+                               │              ClauseRuleEngine (Plain PHP)              │
+                               │   Deterministic statutory evaluation.                  │
+                               │   • Confidence floor: flags UNCLEAR if conf < 0.55     │
+                               │   • Safety interlock: halts interview if age < 15      │
+                               └───────────────────────────┬────────────────────────────┘
+                                                           │
+                                ┌──────────────────────────┴──────────────────────────┐
+                                │                                                     │
+                                ▼                                                     ▼
+    ┌───────────────────────────────────────────────┐     ┌───────────────────────────────────────────────┐
+    │     Screen A: Live Voice Audit Simulator      │     │         Screen B: Monitoring Dashboard        │
+    │  • Smartphone Mockup (380px) & 2G IVR Mode    │     │  • Employer vs. Worker Reconciliation         │
+    │  • Addis AI Voice (Amharic & Afaan Oromoo)    │     │  • "Ask the Ledger" Natural-Language Search   │
+    │  • Context-Aware Follow-Up ("Heard: '...'")   │     │  • Tamper-Evident SHA-256 Chained Digest      │
+    │  • Live Agent Trace Observability Panel       │     │  • 23 Cohort Enterprise Master Ledger         │
+    └───────────────────────────────────────────────┘     └───────────────────────────────────────────────┘
 ```
 
-> **Why this matters to donors & judges:**
-> The AI does not decide who counts — the law does, in transparent code you can audit. If signal is ambiguous, the system never silently hallucinates; it flags `unclear`, triggers one targeted probe, and preserves `unclear` as an honest outcome.
+> **Why this matters to donors & evaluators:**  
+> The AI never decides who counts — the law does. If worker testimony is ambiguous, the system never hallucinates; it surfaces `unclear`, asks a targeted follow-up quoting the ambiguous phrase, and maintains honest audit fidelity.
 
 ---
 
-## 3. Demo Personas
+## 3. Four Multi-Lingual Benchmark Personas
 
-1. **Selam Tesfaye (22, Addis Ababa)**: English, placed in a call centre 6 months ago. 40 hrs/wk, 6500 ETB salary, pension deducted, full freedom of association. **Clean Case**: all 7 clauses resolve `met`.
-2. **Abel Kebede (19, Adama)**: Amharic, construction daily worker paid cash. Started "after the rains" (relative duration). **Ambiguous Case**: `hours_threshold` resolves `unclear` with targeted follow-up probe ("We don't guess").
-3. **Yordanos Girma (14, Packaging)**: Minor case. **Under-15 Hard Stop**: instant interview termination, hard case flag logged, zero count toward programme figures.
-4. **Hiwot (34, Monitoring Officer)**: Uses the dashboard to cross-reference employer sheets against 23+ verified beneficiary interviews and defend audit figures to donor evaluators.
-
----
-
-## 4. Key Features
-
-- **Live Phone Viewport (Screen A)**: Built to true phone width (390px) with live typed-reveal transcript streaming and real-time clause badge updates.
-- **Enterprise Monitoring Dashboard (Screen B)**: Side-by-side comparison of employer-reported numbers vs worker realities, visual discrepancy highlights, SDG chips (`SDG 8.5`, `8.6`, `8.8`, `5.5`, `1.2`), and full verbatim evidence audit trail.
-- **23+ Pre-Seeded Realistic Records**: Immediate operational depth covering garment, leather, agriculture, tech hub, automotive, and hospitality workers across Addis Ababa, Hawassa, Adama, Dire Dawa, Jimma, and Bahir Dar.
-- **Under-15 Immediate Hard Stop**: Automated compliance safeguard protecting donor programme integrity.
+| Persona | Language | Job / Sector | Profile & Test Case | System Behaviour |
+| :--- | :--- | :--- | :--- | :--- |
+| **Selam Tesfaye** | **English** (`en`) | Call Centre Agent, Addis Ababa | 22 yrs old, 40 hrs/wk, 6,500 ETB monthly, direct bank deposit, union committee. | **Clean Case**: All 7 clauses resolve `MET`. Zero follow-up needed. Verifier-critic confirms source quotes. |
+| **Abel Kebede** | **Amharic** (`am`) | Construction Labourer, Adama | 19 yrs old, cash daily pay, started *"after the rains"* (`ከክረምቱ በኋላ`). | **Ambiguous Case**: `hours_threshold` resolves `UNCLEAR`. Supervisor generates context-aware follow-up echoing quote. |
+| **Almaz Tolessa** | **Afaan Oromoo** (`om`) | Textile Operator, Adama / Oromia | 22 yrs old, textile spinning, started *"rooba booda"* (after the rains). | **Afaan Oromoo Benchmark**: Addis AI Voice (`om-default`), echoes *"rooba booda" jettanii naaf himtan —*, clarifies to 40 hrs/wk. |
+| **Yordanos Girma** | **English** (`en`) | Biscuit Packaging Assistant | 14 yrs old helper after school hours. | **Safety Hard Stop**: Under-15 detected $\rightarrow$ immediate interview shutdown, hard-stop flag logged, zero count toward programme figures. |
 
 ---
 
-## 5. Quick Start & Setup
+## 4. Key Capabilities & Innovations
+
+### 🎙️ 1. Multi-Lingual Voice Pipeline (Addis AI & OpenAI)
+- **Addis AI Addis Voices 2**: Native Ethiopian STT and TTS support for **Amharic** (`am-hamen`) and **Afaan Oromoo** (`om-default`).
+- **OpenAI Fallback**: Whisper-1 speech recognition and Alloy TTS for English voice interviews.
+- **Web Speech API Streaming**: Live browser microphone streaming with interim speech bubbles and volume waveform bars.
+
+### 🧠 2. Context-Aware Follow-Up Probes ("Conversational Echo")
+- Instead of generic follow-up questionnaires, the supervisor echoes the beneficiary's exact ambiguous quote:
+  - **English**: *"You mentioned \"after the rains\" — about how many hours do you work in a typical week...?"*
+  - **Amharic**: *«ከክረምቱ በኋላ» እንዳሉ ሰምቻለሁ — በተለመደው ሳምንት ውስጥ በግምት ስንት ሰዓት ይሰራሉ...?*
+  - **Afaan Oromoo**: *"rooba booda" jettanii naaf himtan — Torbanitti saʼaatii meeqa hojjettu...?*
+- Visual **`Heard: '...'`** chip appears above the follow-up prompt bubble.
+
+### 🔍 3. "Ask the Ledger" — Natural-Language Search
+- Query the master database in natural language (e.g., *"show disputed cases"*, *"under-15 safety hard stops"*, *"Afaan Oromoo textile operators"*, *"100% verified good jobs"*).
+- Backed by `LedgerQueryAgent` structured parsing with deterministic fallback for instant response times.
+- Real-time conversational summary banner with 1-click filter reset.
+
+### 📊 4. Live Agent Trace Observability Panel
+- LangSmith/Langfuse-style trace panel rendered side-by-side with the interview view.
+- Visualizes supervisor fan-out, quantitative vs rights specialist timings, and verifier-critic reflection flags in real time.
+
+### 📱 5. Feature-Phone 2G IVR Simulator (`/demo/feature-phone`)
+- Simulates low-cost Nokia / Itel feature phones used by informal and rural workers.
+- Authentic **DTMF Dual-Tone Multi-Frequency** audio generator using Web Audio API oscillators.
+- Instant toggle between **Ge'ez Fidel** (ፊደል) and **Latin Script (Qubee)** orthography.
+
+### 🤝 6. Bilateral Confirmation & Dispute Reconciliation
+- Employer magic-link portal (`/employer/confirm/{token}`) to verify hours and contract duration.
+- Classifies discrepancies into 4 transparent categories: `both_agree`, `both_disagree` (clawback candidate), `worker_only`, and `employer_only`.
+
+### 🔐 7. Tamper-Evident Cryptographic Evidence Pack
+- Chained **HMAC-SHA256** hash digest tree over all 23 beneficiary audits.
+- Downloadable signed `.json` evidence pack (`/dashboard/evidence-pack`) preserving zero-PII audit proofs for international donor evaluation.
+
+### 🌓 8. Full Light & Dark Mode Compatibility
+- Built with Tailwind CSS v4 semantic design tokens, verified across all pages, badges, drawer tabs, and modal dialogues.
+
+---
+
+## 5. Project Structure
+
+```
+├── app/
+│   ├── Ai/Agents/
+│   │   ├── InterviewSupervisorAgent.php   # Coordinates worker extraction agents
+│   │   ├── EmploymentFactsAgent.php       # Specialist: Age, hours, wage metrics
+│   │   ├── RightsProtectionsAgent.php     # Specialist: Rights, discrimination, union
+│   │   ├── ExtractionVerifierAgent.php    # Critic: Fact-checks quotes against transcript
+│   │   └── LedgerQueryAgent.php           # Natural-language search translation
+│   ├── Http/Controllers/
+│   │   ├── DashboardController.php        # Master ledger & AI query endpoint
+│   │   ├── InterviewController.php        # Voice converse, extraction, & speech synthesis
+│   │   └── EmployerConfirmationController.php # Magic-link bilateral confirmation
+│   ├── Models/
+│   │   ├── Beneficiary.php                # Worker identity & language (en, am, om)
+│   │   ├── Interview.php                  # Voice audit transcripts & trace events
+│   │   ├── ClauseAssessment.php           # 7 statutory clause verdicts & quotes
+│   │   ├── SheetRow.php                   # Master ledger aggregate row
+│   │   ├── AgentTraceEvent.php            # Multi-agent observability events
+│   │   └── HardCaseFlag.php               # Compliance safety interlock flags
+│   └── Services/
+│       ├── AddisAiVoice.php               # Addis AI STT, TTS (am/om), and Translation
+│       ├── ClauseRuleEngine.php           # Authoritative deterministic labor rules
+│       ├── FollowUpQuestions.php          # Context-aware follow-up question engine
+│       ├── EvidencePackGenerator.php      # HMAC-SHA256 chained digest generator
+│       └── SheetAggregator.php            # Bilateral reconciliation & rollup
+├── database/
+│   ├── migrations/                        # Full schema definitions
+│   └── seeders/SyntheticInterviewSeeder.php # 23 enterprise cohort records & traces
+├── resources/js/
+│   ├── pages/
+│   │   ├── dashboard.tsx                  # Master ledger, "Ask the Ledger", audit drawer
+│   │   ├── interview.tsx                  # Phone viewport, live trace, benchmark cards
+│   │   ├── feature-phone-simulator.tsx    # 2G DTMF IVR simulator
+│   │   └── employer-confirm.tsx           # Employer confirmation magic-link view
+│   └── components/
+│       ├── agent-trace.tsx                # Live LangSmith-style trace inspector
+│       ├── continuity-timeline.tsx        # 6-month checkpoint timeline
+│       └── mockups/phone-mockup-card.tsx  # Dynamic Island smartphone mockup
+└── routes/web.php                         # Application route definitions
+```
+
+---
+
+## 6. Quickstart & Installation
 
 ### Prerequisites
-- PHP 8.3+ with SQLite/PostgreSQL
-- Composer
-- Node.js 20+ & npm
+- **PHP 8.3+** with SQLite / MySQL / PostgreSQL extension
+- **Composer**
+- **Node.js 20+** and **npm**
 
-### Installation
+### Step-by-Step Setup
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/mikaelendale/AI-builder-hackathon.git
 cd AI-builder-hackathon
 
-# 2. Install PHP and JS dependencies
+# 2. Install PHP and JavaScript dependencies
 composer install
 npm install
 
-# 3. Setup environment and database
+# 3. Configure environment
 cp .env.example .env
 php artisan key:generate
-php artisan migrate --force
 
-# 4. Seed 23+ realistic beneficiary verification records
-php artisan db:seed
+# 4. Run database migrations & seed 23 cohort enterprises + 117 multi-agent trace events
+php artisan migrate:fresh --seed
 
 # 5. Build frontend assets
 npm run build
@@ -119,40 +214,83 @@ npm run build
 php artisan serve
 ```
 
-Open [http://localhost:8000/dashboard](http://localhost:8000/dashboard) to view the Monitoring Dashboard or [http://localhost:8000/interview](http://localhost:8000/interview) for the live phone interview simulator.
+### Environment Variables (Optional for Live AI APIs)
+
+To enable live LLM extraction and Addis AI voice streaming, set the following keys in your `.env`:
+
+```env
+# Addis AI Voice (Amharic & Afaan Oromoo STT/TTS)
+ADDIS_API_KEY=your_addis_ai_key_here
+
+# Groq (Fast Llama-3.3-70B Multi-Agent Execution)
+GROQ_API_KEY=your_groq_api_key_here
+
+# OpenAI (Whisper & Alloy Voice)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Anthropic Claude (Optional)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+```
+
+*(Note: The system includes deterministic local heuristic extractors, rule engines, and search parsers, running 100% offline out-of-the-box even without API keys.)*
 
 ---
 
-## 6. 5-Minute Pitch Rehearsal Flow (Judge Win Condition)
+## 7. 5-Minute Live Pitch Playbook (Judge Win Condition)
 
-1. **Minute 1: The Problem (Hiwot's view)**
-   - Open on Hiwot's reality: filing 6-month sheets for 23 partner enterprises using unverified employer numbers.
-   - Show the initial dashboard loaded with 23+ pre-seeded records, highlighting that nobody had a scalable way to ask the actual workers.
-2. **Minute 2: The Clean Benchmark (Selam)**
-   - Switch to the Phone Viewport ([`/interview`](http://localhost:8000/interview)).
-   - Demonstrate Selam's persona (Call Centre Agent, Addis Ababa) resolving all 7 statutory clauses as `MET` in real-time.
-3. **Minute 3: The Ambiguity Probe (Abel — "We Don't Guess")**
-   - Run Abel's Amharic voice interview (*"started after the rains"*).
-   - Show `hours_threshold` resolving `UNCLEAR` with the exact ambiguous quote surfaced on screen.
-   - Show the agent asking the targeted follow-up probe and re-evaluating cleanly.
-4. **Minute 4: The Under-15 Hard Stop (Yordanos)**
-   - Run Yordanos (14 years old). Show immediate red alert hard stop, automated termination, and zero rollup into good job totals.
-5. **Minute 5: The Aggregate Discrepancy Rollup (Donor Defense)**
-   - Return to the Dashboard ([`/dashboard`](http://localhost:8000/dashboard)).
-   - Show how independent beneficiary voice audits reveal discrepancies against employer claims, giving Hiwot an undeniable audit trail that survives donor scrutiny.
+1. **Minute 1: The Problem (M&E Officer Hiwot's View)**
+   - Open [`/dashboard`](http://localhost:8000/dashboard).
+   - Show the reality of 23 partner enterprises reporting 100% "Good Jobs Created" via unverified employer sheets.
+   - Point out the discrepancy column: before this platform, nobody asked the worker.
+
+2. **Minute 2: The Clean Benchmark (Selam Tesfaye — English)**
+   - Navigate to [`/interview`](http://localhost:8000/interview).
+   - Trigger **Selam Tesfaye** (Call Centre Agent, Addis Ababa).
+   - Show all 7 statutory criteria resolving `100% Verified` with Verifier-Critic reflection confirmed in the live trace panel.
+
+3. **Minute 3: The Ambiguity Probe & Context-Aware Echo (Abel Kebede — Amharic)**
+   - Trigger **Abel Kebede** (Construction Daily Labourer, Adama).
+   - The extraction critic flags relative duration (*"after the rains"* / *«ከክረምቱ በኋላ»*).
+   - The supervisor issues a context-aware follow-up probe echoing the phrase: *«ከክረምቱ በኋላ» እንዳሉ ሰምቻለሁ — በተለመደው ሳምንት ውስጥ በግምት ስንት ሰዓት ይሰራሉ?*
+   - Click the clarification button to resolve hours to 35 hrs/wk.
+
+4. **Minute 4: Afaan Oromoo Voice & 2G IVR Mode (Almaz Tolessa)**
+   - Switch language to **Afaan Oromoo** and trigger **Almaz Tolessa**.
+   - Show native Addis AI Voice synthesis (`om-default`) and context-aware follow-up (*"rooba booda" jettanii naaf himtan —*).
+   - Briefly switch to [`/demo/feature-phone`](http://localhost:8000/demo/feature-phone) to show the 2G DTMF keypad interface.
+
+5. **Minute 5: The Safety Hard Stop, "Ask the Ledger", & Evidence Pack**
+   - Trigger **Yordanos Girma** (14 yrs old minor) $\rightarrow$ instant red compliance shutdown.
+   - Return to [`/dashboard`](http://localhost:8000/dashboard).
+   - Type in *"show disputed cases"* in **Ask the Ledger** to instantly surface the 7 clawback records.
+   - Click **Signed Evidence Pack (.json)** to show the HMAC-SHA256 cryptographic audit trail.
 
 ---
 
-## 7. Running Tests
+## 8. Test Suite & Verification
+
+The test suite includes unit and integration tests covering multi-agent extraction, rule evaluation, bilateral confirmation, and hash chaining.
 
 ```bash
+# Run PHPUnit test suite
 php artisan test
 ```
 
-All 48 feature and unit tests run with 100% pass rate (167 assertions).
+**Results**: `64 tests passed, 270 assertions (100% pass rate)`.
 
 ---
 
-## 8. License
+## 9. Technology Stack
 
-MIT License — sequa Ethiopia AI Builder Hackathon 2026.
+- **Backend**: Laravel 13, PHP 8.3, SQLite / PostgreSQL
+- **Frontend**: React 19, Inertia.js v2, Tailwind CSS v4, TypeScript 5, Lucide React
+- **AI & Multi-Agent**: Laravel AI, Groq Llama-3.3-70B, OpenAI GPT-4o-mini & Whisper, Anthropic Claude 3.5 Sonnet
+- **Voice & Speech**: Addis AI Addis Voices 2 (`am`, `om`), Web Audio API DTMF Synthesizer
+- **Security & Integrity**: HMAC-SHA256 chained hash digests, CSRF protection
+
+---
+
+## 10. License
+
+MIT License — Developed for the **sequa Ethiopia AI Builder Hackathon 2026**.
+

@@ -475,9 +475,25 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
         }
     };
 
+    // Fast Almaz Afaan Oromoo Voice Simulation
+    const handleSimulateAlmazVoice = () => {
+        if (callState !== 'connected') {
+            handleStartCall();
+            setTimeout(() => {
+                stopAndSendTurn(
+                    "Maqaan koo Almaaz Toleessaa jedhama. Umriin koo waggaa 22 dha. Paarkii Indaastirii Adaamaa keessatti warshaalee huccuu keessa nan hojjedha. Rooba booda ji'oota muraasaaf nan hojjedhe. Mindaan koo ji'atti qarshii 5800 dha."
+                );
+            }, 1800);
+        } else {
+            stopAndSendTurn(
+                "Maqaan koo Almaaz Toleessaa jedhama. Umriin koo waggaa 22 dha. Paarkii Indaastirii Adaamaa keessatti warshaalee huccuu keessa nan hojjedha. Rooba booda ji'oota muraasaaf nan hojjedhe. Mindaan koo ji'atti qarshii 5800 dha."
+            );
+        }
+    };
+
     return (
         <>
-            <Head title="Feature Phone IVR Voice Simulator — Addis AI Amharic TTS & STT" />
+            <Head title="Feature Phone IVR Voice Simulator — Addis AI Amharic & Afaan Oromoo TTS & STT" />
 
             <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-2 sm:p-4 transition-colors duration-200">
                 {/* Top Banner Navigation */}
@@ -499,7 +515,7 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                             className="h-8 text-xs font-mono border-border bg-card hover:bg-muted text-foreground"
                         >
                             <Globe className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400" />
-                            {scriptMode === 'fidel' ? 'ፊደል (Ge\'ez)' : 'Latin Script'}
+                            {scriptMode === 'fidel' ? 'ፊደል (Ge\'ez)' : 'Latin / Oromoo'}
                         </Button>
                         <ThemeToggle />
                     </div>
@@ -511,9 +527,16 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                     <button
                         type="button"
                         onClick={handleSimulateAbelVoice}
-                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-medium text-[11px] truncate hover:bg-emerald-500/20 transition-colors"
+                        className="py-1 px-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-medium text-[10px] truncate hover:bg-amber-500/20 transition-colors"
                     >
-                        <Volume2 className="w-3 h-3 inline mr-1" /> Abel Spoken Voice (AM)
+                        <Volume2 className="w-3 h-3 inline mr-0.5" /> Abel (AM)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSimulateAlmazVoice}
+                        className="py-1 px-2 rounded-lg bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-medium text-[10px] truncate hover:bg-sky-500/20 transition-colors"
+                    >
+                        <Volume2 className="w-3 h-3 inline mr-0.5" /> Almaz (OM)
                     </button>
                     <button
                         type="button"
@@ -522,9 +545,9 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                             else if (!isListening) startMicListening();
                             else stopAndSendTurn();
                         }}
-                        className="py-1.5 px-2.5 rounded-lg bg-muted text-foreground border border-border font-medium text-[11px] hover:bg-muted/80 flex items-center gap-1 transition-colors"
+                        className="py-1 px-2 rounded-lg bg-muted text-foreground border border-border font-medium text-[10px] hover:bg-muted/80 flex items-center gap-1 transition-colors"
                     >
-                        <Mic className="w-3 h-3" /> {isListening ? 'Send Voice' : 'Your Mic'}
+                        <Mic className="w-3 h-3" /> {isListening ? 'Send' : 'Mic'}
                     </button>
                 </div>
 
