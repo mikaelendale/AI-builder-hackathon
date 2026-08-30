@@ -101,13 +101,13 @@ const CLAUSE_DEFINITIONS: Record<
     string,
     { label: string; short: string; sdg: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-    age_15_plus: { label: 'Age 15+ Threshold', short: 'Age 15+', sdg: 'SDG 8.6', icon: UserCheck },
-    hours_threshold: { label: '20h/wk (26 wks) or 520h/yr', short: 'Duration/Hours', sdg: 'SDG 8.5', icon: Clock },
-    min_wage: { label: 'Legal Minimum Wage', short: 'Fair Wage', sdg: 'SDG 1.2', icon: DollarSign },
+    age_15_plus: { label: 'Age 15 or Older', short: 'Age 15+', sdg: 'SDG 8.6', icon: UserCheck },
+    hours_threshold: { label: 'Work Hours & Duration', short: 'Hours', sdg: 'SDG 8.5', icon: Clock },
+    min_wage: { label: 'Fair Pay', short: 'Fair Pay', sdg: 'SDG 1.2', icon: DollarSign },
     no_child_labor: { label: 'No Child Labour', short: 'No Child Labour', sdg: 'SDG 8.7', icon: ShieldCheck },
-    no_forced_labor: { label: 'No Forced Labour / Coercion', short: 'Free Consent', sdg: 'SDG 8.8', icon: Shield },
-    no_discrimination: { label: 'Non-Discrimination & Equal Pay', short: 'Equal Treatment', sdg: 'SDG 5.5', icon: Users },
-    freedom_of_association: { label: 'Freedom of Association', short: 'Union Rights', sdg: 'SDG 8.8', icon: Award },
+    no_forced_labor: { label: 'No Forced Work', short: 'Free Choice', sdg: 'SDG 8.8', icon: Shield },
+    no_discrimination: { label: 'Equal Treatment', short: 'Equal Treatment', sdg: 'SDG 5.5', icon: Users },
+    freedom_of_association: { label: 'Right to Join Groups', short: 'Group Rights', sdg: 'SDG 8.8', icon: Award },
 };
 
 const PERSONA_SCRIPTS = {
@@ -153,7 +153,7 @@ const PERSONA_SCRIPTS = {
         lang: 'en' as const,
         type: 'synthetic' as const,
         tag: 'Minor Stop',
-        description: 'Under-15 detected → interview stops immediately, flags, never counts.',
+        description: 'Under 15 years old — interview stops right away.',
         script:
             'Hello, my name is Yordanos Girma. I am 14 years old. I work helping at the biscuit packaging workshop after school hours.',
     },
@@ -699,7 +699,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
     return (
         <>
-            <Head title="Beneficiary Voice Verification — sequa Multi-Agent Audit" />
+            <Head title="Worker Voice Check — sequa" />
 
             <div className="min-h-screen bg-background text-foreground py-4 sm:py-6 px-3 sm:px-6 flex flex-col items-center justify-start transition-colors duration-200">
                 {/* Executive Top Bar */}
@@ -709,9 +709,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500"></span>
                         </span>
-                        <span className="font-semibold tracking-tight text-xs text-foreground">sequa Multi-Agent Verification Harness</span>
+                        <span className="font-semibold tracking-tight text-xs text-foreground">sequa Job Check System</span>
                         <span className="hidden md:inline-block text-[10px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full border border-border/60">
-                            Supervisor Fan-Out • Verifier-Critic Reflection
+                            AI-Powered • Double-Checked
                         </span>
                     </div>
 
@@ -719,7 +719,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                         {lastSavedRowId && (
                             <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold animate-fadeIn">
                                 <CheckCircle2 className="size-3 text-emerald-500" />
-                                Ledger Row #{lastSavedRowId} Synced
+                                Record #{lastSavedRowId} Saved
                             </span>
                         )}
                         <Button
@@ -729,7 +729,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                             className="h-8 px-3 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm flex items-center gap-1.5"
                         >
                             {isSavingToLedger ? <RefreshCcw className="size-3 animate-spin" /> : <Save className="size-3" />}
-                            <span>Save & View on Master Ledger →</span>
+                            <span>Save & View Records →</span>
                         </Button>
                         <ThemeToggle />
                     </div>
@@ -741,7 +741,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                     {/* Left Column (5 cols): Phone Simulator (Beneficiary View) */}
                     <div className="lg:col-span-5 flex flex-col items-center">
                         <div className="w-full max-w-[380px] mb-2 flex items-center justify-between px-2 text-[11px] text-muted-foreground">
-                            <span className="font-medium text-foreground">Screen A — Beneficiary View</span>
+                            <span className="font-medium text-foreground">Screen A — Worker View</span>
                             <div className="flex items-center gap-1 p-0.5 bg-muted rounded-full border border-border">
                                 {(['titanium', 'purple', 'orange', 'white', 'cherry'] as const).map((v) => (
                                     <button
@@ -777,10 +777,10 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div className="px-3.5 py-2 shrink-0 bg-card/90 backdrop-blur-sm border-b border-border flex items-center justify-between gap-2 z-10">
                                     <div>
                                         <div className="text-xs font-bold tracking-tight text-foreground">
-                                            Voice Audit
+                                            Voice Check
                                         </div>
                                         <div className="text-[9px] text-muted-foreground">
-                                            Direct Worker Verification
+                                            Worker Interview
                                         </div>
                                     </div>
 
@@ -824,10 +824,10 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div className="px-3.5 py-1.5 shrink-0 bg-muted/30 border-b border-border flex flex-col gap-1">
                                     <div className="flex items-center justify-between text-[10px]">
                                         <span className="font-medium text-muted-foreground">
-                                            Statutory Criteria
+                                            Job Checks
                                         </span>
                                         <span className="font-mono font-semibold text-foreground">
-                                            {progressStats.met}/{progressStats.total} Verified ({progressStats.percent}%)
+                                            {progressStats.met}/{progressStats.total} Passed ({progressStats.percent}%)
                                         </span>
                                     </div>
 
@@ -878,12 +878,12 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                 {isListening
                                                     ? 'Listening for worker speech...'
                                                     : isAgentSpeaking
-                                                      ? 'AI Auditor speaking...'
+                                                      ? 'Assistant speaking...'
                                                       : isProcessing
-                                                        ? 'Evaluating statutory clauses...'
+                                                        ? 'Checking your answers...'
                                                         : isLiveCallActive
                                                           ? 'Call Active'
-                                                          : 'Ready to verify'}
+                                                          : 'Ready to start'}
                                             </div>
                                             <div className="text-[9px] text-muted-foreground">
                                                 {languageMode === 'om'
@@ -915,10 +915,10 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     {stoppedHardCase && (
                                         <Alert className="border-destructive/30 bg-destructive/10 text-destructive p-2.5 rounded-lg">
                                             <AlertTitle className="text-xs font-bold">
-                                                Hard Stop Triggered — Under 15 Minor
+                                                ⛔ Stopped — Worker is Under 15
                                             </AlertTitle>
                                             <AlertDescription className="text-[10px] mt-0.5">
-                                                {hardCaseDetail || 'Beneficiary is under legal minimum age of 15. The interview terminated immediately.'}
+                                                {hardCaseDetail || 'This person is under 15 years old. The interview was stopped right away.'}
                                             </AlertDescription>
                                         </Alert>
                                     )}
@@ -926,8 +926,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     <div className="space-y-2">
                                         {chatTurns.length === 0 && !isLiveCallActive && (
                                             <div className="text-center py-6 text-muted-foreground text-xs space-y-1.5">
-                                                <p className="font-semibold text-foreground">Ready for Audit</p>
-                                                <p className="text-[11px]">Select a persona from the console or tap start.</p>
+                                                <p className="font-semibold text-foreground">Ready to Start</p>
+                                                <p className="text-[11px]">Pick a test person or tap Start.</p>
                                             </div>
                                         )}
 
@@ -937,7 +937,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                 className={`flex flex-col ${turn.sender === 'agent' ? 'items-start' : 'items-end'}`}
                                             >
                                                 <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase tracking-wider">
-                                                    {turn.sender === 'agent' ? 'AI Auditor (sequa)' : 'Beneficiary Worker'}
+                                                    {turn.sender === 'agent' ? 'Assistant' : 'Worker'}
                                                 </div>
                                                 <div
                                                     className={`p-2.5 rounded-xl max-w-[88%] text-xs leading-relaxed ${
@@ -1015,7 +1015,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                             ? 'AI ረዳት እያሰበ ነው...'
                                                             : languageMode === 'om'
                                                               ? 'AI Yaadaa jira...'
-                                                              : 'AI Auditor Thinking...'}
+                                                              : 'Checking answers...'}
                                                     </span>
                                                 </div>
                                                 <div className="p-3 rounded-xl max-w-[92%] bg-card text-card-foreground border border-primary/30 shadow-xs flex flex-col gap-2">
@@ -1030,23 +1030,23 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                                 ? 'የሥራ ሁኔታዎችን በመመርመር ላይ...'
                                                                 : languageMode === 'om'
                                                                   ? 'Ulaagaalee seeraa qorachaa jira...'
-                                                                  : 'Reasoning and evaluating statutory clauses...'}
+                                                                  : 'Reviewing your answers...'}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground border-t border-border pt-1.5">
                                                         <Badge variant="outline" className="text-[9px] h-4 font-mono px-1.5 bg-muted/60 border-primary/40 text-primary font-bold">
                                                             {clauseProcessingPhase === 'extracting'
-                                                                ? 'Phase 1: Supervisor Fan-Out'
+                                                                ? 'Step 1: Listening'
                                                                 : clauseProcessingPhase === 'verifying'
-                                                                  ? 'Phase 2: Verifier-Critic Fact-Check'
-                                                                  : 'Phase 3: Statutory Rule Engine'}
+                                                                  ? 'Step 2: Double-Checking'
+                                                                  : 'Step 3: Applying Rules'}
                                                         </Badge>
                                                         <span className="truncate text-[10px] text-muted-foreground">
                                                             {clauseProcessingPhase === 'extracting'
-                                                                ? (languageMode === 'am' ? 'ማስረጃዎችን በማውጣት ላይ' : languageMode === 'om' ? 'Ragaa baasaa jira' : 'Extracting facts & rights')
+                                                                ? (languageMode === 'am' ? 'ማስረጃዎችን በማውጣት ላይ' : languageMode === 'om' ? 'Ragaa baasaa jira' : 'Reading your answers')
                                                                 : clauseProcessingPhase === 'verifying'
-                                                                  ? (languageMode === 'am' ? 'እውነተኝነትን በማጣራት ላይ' : languageMode === 'om' ? 'Dhugummaa mirkaneessaa' : 'Temperature=0 reflection')
-                                                                  : (languageMode === 'am' ? 'ህጋዊ ውሳኔዎችን በመወሰን ላይ' : languageMode === 'om' ? 'Murtii seeraa qopheessaa' : 'Computing final verdicts')}
+                                                                  ? (languageMode === 'am' ? 'እውነተኝነትን በማጣራት ላይ' : languageMode === 'om' ? 'Dhugummaa mirkaneessaa' : 'Double-checking')
+                                                                  : (languageMode === 'am' ? 'ህጋዊ ውሳኔዎችን በመወሰን ላይ' : languageMode === 'om' ? 'Murtii seeraa qopheessaa' : 'Getting results')}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1062,7 +1062,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                             onClick={() => setShowClauseDetails(!showClauseDetails)}
                                             className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground py-0.5"
                                         >
-                                            <span>7 Statutory Clauses ({progressStats.met}/{progressStats.total})</span>
+                                            <span>7 Job Checks ({progressStats.met}/{progressStats.total})</span>
                                             <span className="flex items-center gap-0.5 text-foreground">
                                                 {showClauseDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                             </span>
@@ -1077,12 +1077,12 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
                                                 const statusLabel =
                                                     status === 'met'
-                                                        ? '100% Verified'
+                                                        ? '✅ Good'
                                                         : status === 'not_met'
-                                                          ? 'Not Met'
+                                                          ? '❌ Not Met'
                                                           : status === 'unclear'
-                                                            ? 'Needs Follow-Up'
-                                                            : 'Waiting on Answer';
+                                                            ? '⚠️ Unclear'
+                                                            : '⏳ Waiting';
 
                                                 return (
                                                     <div
@@ -1116,11 +1116,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                                                 <>
                                                                     {verdict?.verifier_flag !== undefined && verdict?.verifier_flag !== null && (
                                                                         verdict.verifier_flag === false ? (
-                                                                            <span title="Verifier-Critic Confirmed" className="text-emerald-600 dark:text-emerald-400">
+                                                                            <span title="Double-Checked ✓" className="text-emerald-600 dark:text-emerald-400">
                                                                                 <ShieldCheck className="w-3 h-3" />
                                                                             </span>
                                                                         ) : (
-                                                                            <span title={`Flagged by Critic: ${verdict.verifier_note || 'Unfaithful signal'}`} className="text-amber-600 dark:text-amber-400">
+                                                                            <span title={`Needs Review: ${verdict.verifier_note || 'May need checking'}`} className="text-amber-600 dark:text-amber-400">
                                                                                 <AlertTriangle className="w-3 h-3" />
                                                                             </span>
                                                                         )
@@ -1209,11 +1209,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                 <div className="flex items-center gap-2">
                                     <Cpu className="size-4 text-primary" />
                                     <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                                        Multi-Agent Benchmark Persona Triggers
+                                        Test Scenarios
                                     </span>
                                 </div>
                                 <span className="text-[10px] font-mono text-muted-foreground">
-                                    LangSmith Observability Spec
+                                    AI Activity Log
                                 </span>
                             </div>
 
@@ -1235,7 +1235,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         </Badge>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                                        All 7 clauses resolve met without follow-up. Verifier confirms source quotes.
+                                        All 7 checks pass. Clean case, no follow-up needed.
                                     </p>
                                 </button>
 
@@ -1256,7 +1256,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         </Badge>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                                        Critic flags relative duration. Supervisor issues context-aware probe.
+                                        Unclear work hours — system asks a follow-up question.
                                     </p>
                                 </button>
 
@@ -1277,7 +1277,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         </Badge>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                                        Afaan Oromoo STT/TTS. Relative duration echoes context-aware follow-up.
+                                        Afaan Oromoo voice. Unclear duration triggers a follow-up question.
                                     </p>
                                 </button>
 
@@ -1294,11 +1294,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                     <div className="flex items-center justify-between">
                                         <div className="text-xs font-bold text-foreground">Yordanos Girma</div>
                                         <Badge variant="outline" className="text-[9px] h-4 text-destructive border-destructive/30">
-                                            Minor Stop
+                                            Under 15
                                         </Badge>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                                        Safety interlock halts interview immediately. Downstream clauses aborted.
+                                        Interview stops right away. Remaining checks are skipped.
                                     </p>
                                 </button>
                             </div>

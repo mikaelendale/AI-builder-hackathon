@@ -19,7 +19,7 @@ export function ContinuityTimeline({ checkpoints = [] }: ContinuityTimelineProps
     if (!checkpoints || checkpoints.length === 0) {
         return (
             <div className="text-[11px] text-muted-foreground italic p-3 bg-muted/30 rounded-xl border border-border">
-                Single interview recorded — round 1 baseline established. Re-check scheduled for 3-month mark.
+                First interview done. Next check in 3 months.
             </div>
         );
     }
@@ -33,11 +33,11 @@ export function ContinuityTimeline({ checkpoints = [] }: ContinuityTimelineProps
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 font-semibold text-foreground">
                     <History className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Longitudinal Continuity Checkpoints ({checkpoints.length} rounds)</span>
+                    <span>Follow-Up Checks ({checkpoints.length} rounds)</span>
                 </div>
                 {meets26Weeks ? (
                     <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 text-[10px]">
-                        26+ Weeks Continuous Verified
+                        26+ Weeks Confirmed
                     </Badge>
                 ) : (
                     <Badge className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20 text-[10px]">

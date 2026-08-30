@@ -187,7 +187,7 @@ export function AgentTrace({
                     </div>
                     <div className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider font-semibold text-foreground">
                         <Terminal className="size-3.5 text-primary" />
-                        <span>Agent Trace — Multi-Agent Observability</span>
+                        <span>Activity Log</span>
                     </div>
                     <Badge variant="outline" className="font-mono text-[10px] h-4.5 px-1.5 border-border/60 text-muted-foreground">
                         {events.length} {events.length === 1 ? 'event' : 'events'}
@@ -219,7 +219,7 @@ export function AgentTrace({
                         className={`text-[10px] font-mono px-2 py-0.5 rounded border border-border/60 transition-colors ${
                             autoScroll ? 'bg-muted text-foreground font-semibold' : 'text-muted-foreground opacity-60'
                         }`}
-                        title="Auto-scroll on incoming trace events"
+                        title="Auto-scroll new activity"
                     >
                         Auto-scroll: {autoScroll ? 'ON' : 'OFF'}
                     </button>
@@ -236,8 +236,8 @@ export function AgentTrace({
                         <Cpu className="size-6 text-muted-foreground/40 animate-pulse" />
                         <p className="text-xs font-mono">
                             {isLiveStreaming
-                                ? 'Awaiting multi-agent supervisor dispatch...'
-                                : 'No trace events recorded for this interview session yet.'}
+                                ? 'Waiting for interview to start...'
+                                : 'No activity recorded yet.'}
                         </p>
                     </div>
                 ) : (
@@ -301,7 +301,7 @@ export function AgentTrace({
                                             <button
                                                 type="button"
                                                 className="text-muted-foreground hover:text-foreground transition-transform"
-                                                title="Toggle JSON inspector"
+                                                title="Show/hide details"
                                             >
                                                 {isExpanded ? (
                                                     <ChevronDown className="size-3.5 text-primary" />
@@ -318,7 +318,7 @@ export function AgentTrace({
                                     <div className="mt-2 pt-2 border-t border-border/60 space-y-1.5">
                                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                             <span className="font-semibold uppercase tracking-wider text-foreground">
-                                                Structured Payload ({e.agent_name})
+                                                Details ({e.agent_name})
                                             </span>
                                             <button
                                                 type="button"

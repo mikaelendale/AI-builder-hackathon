@@ -33,7 +33,7 @@ import {
 export default function Welcome() {
     return (
         <>
-            <Head title="sequa — Direct Worker Good Job Verification & Multi-Agent Ledger" />
+            <Head title="sequa — Worker Job Check" />
 
             <div className="min-h-screen bg-background text-foreground flex flex-col justify-between selection:bg-primary selection:text-primary-foreground transition-colors duration-200">
                 {/* Clean Top Navigation */}
@@ -45,7 +45,7 @@ export default function Welcome() {
                             </div>
                             <div>
                                 <span className="font-semibold text-sm tracking-tight text-foreground block">
-                                    sequa Multi-Agent Verification
+                                    sequa Job Check
                                 </span>
                                 <span className="text-[10px] text-muted-foreground block -mt-0.5 font-mono">
                                     Ethiopia Good Jobs Programme (SICP)
@@ -56,12 +56,12 @@ export default function Welcome() {
                         <div className="flex items-center gap-2.5 sm:gap-3">
                             <Link href="/dashboard">
                                 <Button variant="outline" size="sm" className="text-xs font-semibold rounded-lg border-border bg-card hover:bg-muted">
-                                    📊 Master Ledger
+                                    📊 Records
                                 </Button>
                             </Link>
                             <Link href="/interview">
                                 <Button size="sm" className="text-xs font-semibold gap-1.5 shadow-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
-                                    <Mic className="w-3.5 h-3.5" /> Launch Voice Audit
+                                    <Mic className="w-3.5 h-3.5" /> Start Voice Check
                                 </Button>
                             </Link>
                             <ThemeToggle />
@@ -79,25 +79,25 @@ export default function Welcome() {
                         </span>
                         <span className="font-semibold text-foreground">AI Builder Hackathon Addis Ababa</span>
                         <span className="text-muted-foreground">•</span>
-                        <span className="font-mono text-[11px] text-primary font-bold">Supervisor Fan-Out + Verifier-Critic</span>
+                        <span className="font-mono text-[11px] text-primary font-bold">AI-Powered Double-Check</span>
                     </div>
 
                     {/* Editorial Display Heading */}
                     <h1 className="text-4xl sm:text-6xl font-normal font-serif tracking-tight text-foreground max-w-3xl leading-[1.12]">
-                        Direct Worker Good Job Verification.{' '}
-                        <WavyUnderline>Audited in Real Time.</WavyUnderline>
+                        Worker Job Check.{' '}
+                        <WavyUnderline>Checked in Real Time.</WavyUnderline>
                     </h1>
 
                     {/* Editorial Lead Paragraph */}
                     <p className="mt-6 text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
-                        Replace subjective self-reporting with an autonomous multi-agent audit pipeline. Evaluate 7 statutory criteria across English, Amharic, and Afaan Oromoo, reconcile bilateral employer claims, and export cryptographic tamper-evident proof to donor agencies.
+                        Check if jobs are fair by interviewing workers directly. Reviews 7 rules across English, Amharic, and Afaan Oromoo, compares with employer reports, and creates secure proof for reviewers.
                     </p>
 
                     {/* Primary Hero CTAs */}
                     <div className="flex flex-wrap items-center justify-center gap-3.5 mt-8 mb-12">
                         <Link href="/dashboard">
                             <Button size="lg" className="h-11 px-5 text-sm font-semibold rounded-xl gap-2 shadow-sm bg-primary text-primary-foreground hover:bg-primary/90">
-                                <Search className="w-4 h-4" /> Explore Master Ledger Dashboard →
+                                <Search className="w-4 h-4" /> View Records Dashboard →
                             </Button>
                         </Link>
                         <Link href="/interview">
@@ -107,32 +107,32 @@ export default function Welcome() {
                         </Link>
                         <Link href="/demo/feature-phone">
                             <Button size="lg" variant="ghost" className="h-11 px-4 text-xs font-semibold rounded-xl text-muted-foreground hover:text-foreground">
-                                <PhoneCall className="w-3.5 h-3.5" /> 2G IVR Simulator
+                                <PhoneCall className="w-3.5 h-3.5" /> Phone Call Test
                             </Button>
                         </Link>
                     </div>
 
                     {/* Interactive Browser Frame Preview */}
                     <div className="w-full max-w-3xl mb-8">
-                        <BrowserMockup url="https://sequa.org/dashboard" badgeText="MASTER LEDGER & AUDIT ENGINE">
+                        <BrowserMockup url="https://sequa.org/dashboard" badgeText="RECORDS & CHECK SYSTEM">
                             <div className="p-5 sm:p-6 bg-card text-card-foreground flex flex-col gap-4 text-left">
                                 {/* Mockup KPI Strip */}
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-4 border-b border-border">
                                     <div className="p-2.5 rounded-xl border border-border/80 bg-background">
-                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Programme Cohort</div>
+                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Workers in Programme</div>
                                         <div className="text-base font-bold text-foreground mt-0.5">23 Partner Enterprises</div>
                                     </div>
                                     <div className="p-2.5 rounded-xl border border-border/80 bg-background">
-                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Verified Good Jobs</div>
+                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Good Jobs Found</div>
                                         <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">13 (57%) Confirmed</div>
                                     </div>
                                     <div className="p-2.5 rounded-xl border border-border/80 bg-background">
-                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Bilateral Mismatches</div>
-                                        <div className="text-base font-bold text-amber-600 dark:text-amber-400 mt-0.5">8 Discrepancies</div>
+                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Don't Match</div>
+                                        <div className="text-base font-bold text-amber-600 dark:text-amber-400 mt-0.5">8 Mismatches</div>
                                     </div>
                                     <div className="p-2.5 rounded-xl border border-border/80 bg-background">
-                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Under-15 Stops</div>
-                                        <div className="text-base font-bold text-destructive mt-0.5">8 Hard Cases</div>
+                                        <div className="text-[10px] text-muted-foreground uppercase font-mono font-semibold">Under 15</div>
+                                        <div className="text-base font-bold text-destructive mt-0.5">8 Stopped</div>
                                     </div>
                                 </div>
 
@@ -156,7 +156,7 @@ export default function Welcome() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">
-                                            ✓ Verified Good Job
+                                            ✓ Good Job
                                         </span>
                                     </div>
                                 </div>
@@ -168,13 +168,13 @@ export default function Welcome() {
                     <div className="max-w-3xl mx-auto text-center border-t border-border pt-16 pb-14 w-full">
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted text-muted-foreground text-xs font-medium mb-3">
                             <Cpu className="size-3.5 text-primary" />
-                            <span>Observability & Reflection Engine</span>
+                            <span>How the AI Works</span>
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-serif font-normal text-foreground">
-                            Multi-Agent Supervisor Fan-Out with <TerracottaUnderline>Critic Reflection</TerracottaUnderline>
+                            AI System with <TerracottaUnderline>Double-Checking</TerracottaUnderline>
                         </h2>
                         <p className="mt-3 text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
-                            Interviews are never processed as a single LLM prompt. Specialized specialist sub-agents analyze employment facts and statutory rights concurrently, verified by an adversarial fact-checker before deterministic rule execution.
+                            Each interview is checked by multiple AI helpers that look at work facts and worker rights separately, then double-checked before applying the rules.
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-8 text-left">
@@ -182,9 +182,9 @@ export default function Welcome() {
                                 <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2.5 font-bold text-xs">
                                     01
                                 </div>
-                                <h3 className="font-semibold text-xs text-foreground">Supervisor Fan-Out</h3>
+                                <h3 className="font-semibold text-xs text-foreground">AI Helpers</h3>
                                 <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
-                                    Coordinates EmploymentFactsAgent (quantitative metrics) and RightsProtectionsAgent (4 constitutional rights).
+                                    Separate AI helpers check work details (hours, pay) and worker rights (safety, fairness) at the same time.
                                 </p>
                             </div>
 
@@ -192,9 +192,9 @@ export default function Welcome() {
                                 <div className="size-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5 font-bold text-xs">
                                     02
                                 </div>
-                                <h3 className="font-semibold text-xs text-foreground">Verifier-Critic Reflection</h3>
+                                <h3 className="font-semibold text-xs text-foreground">Double-Checker</h3>
                                 <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
-                                    Adversarial temperature=0 agent cross-checks extracted claims against raw audio transcripts to eliminate hallucinations.
+                                    A second AI checks the first AI's work against what the worker actually said, to catch any mistakes.
                                 </p>
                             </div>
 
@@ -202,9 +202,9 @@ export default function Welcome() {
                                 <div className="size-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 font-bold text-xs">
                                     03
                                 </div>
-                                <h3 className="font-semibold text-xs text-foreground">Clause Rule Engine</h3>
+                                <h3 className="font-semibold text-xs text-foreground">Rules Check</h3>
                                 <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
-                                    Deterministic statutory evaluator applying Ethiopian Labor Proclamation 1156/2019 without LLM drift.
+                                    Applies Ethiopian Labour Law rules automatically — the AI never guesses.
                                 </p>
                             </div>
                         </div>
@@ -214,13 +214,13 @@ export default function Welcome() {
                     <div className="max-w-4xl mx-auto text-center border-t border-border pt-16 pb-16 w-full">
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted text-muted-foreground text-xs font-medium mb-3">
                             <Globe className="size-3.5 text-primary" />
-                            <span>Comprehensive Trilingual Benchmark Suite</span>
+                            <span>Test All Languages</span>
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-serif font-normal text-foreground">
                             Built for <CircleHighlight>Real Workers</CircleHighlight> Across Ethiopia
                         </h2>
                         <p className="mt-3 text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
-                            Test the full multi-turn conversational loop with live speech recognition and synthesis across 4 standardized benchmark personas.
+                            Test the full interview with voice in all 4 test scenarios.
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-8 text-left">
@@ -236,11 +236,11 @@ export default function Welcome() {
                                         </Badge>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-normal">
-                                        Call Centre Agent (Addis Ababa). All 7 clauses resolve met without follow-up.
+                                        Call Centre Agent (Addis Ababa). All 7 checks pass without follow-up.
                                     </p>
                                 </div>
                                 <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center text-[10px] font-semibold text-primary">
-                                    <span>Test Selam Audit →</span>
+                                    <span>Test Selam →</span>
                                 </div>
                             </Link>
 
@@ -256,11 +256,11 @@ export default function Welcome() {
                                         </Badge>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-normal">
-                                        Construction Worker (Adama). Relative duration triggers context-aware Amharic follow-up probe.
+                                        Construction Worker (Adama). Unclear work hours — system asks a follow-up question in Amharic.
                                     </p>
                                 </div>
                                 <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center text-[10px] font-semibold text-primary">
-                                    <span>Test Abel Audit →</span>
+                                    <span>Test Abel →</span>
                                 </div>
                             </Link>
 
@@ -276,11 +276,11 @@ export default function Welcome() {
                                         </Badge>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-normal">
-                                        Textile Operator (Oromia). Native Afaan Oromoo STT/TTS with contextual probe resolution.
+                                        Textile Operator (Oromia). Afaan Oromoo voice with follow-up question.
                                     </p>
                                 </div>
                                 <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center text-[10px] font-semibold text-primary">
-                                    <span>Test Almaz Audit →</span>
+                                    <span>Test Almaz →</span>
                                 </div>
                             </Link>
 
@@ -296,11 +296,11 @@ export default function Welcome() {
                                         </Badge>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-normal">
-                                        Age 14 detected. Safety interlock terminates interview immediately, never counts toward totals.
+                                        Age 14 found. Interview stops right away, never counted.
                                     </p>
                                 </div>
                                 <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center text-[10px] font-semibold text-destructive">
-                                    <span>Test Hard Stop →</span>
+                                    <span>Test Under-15 Stop →</span>
                                 </div>
                             </Link>
                         </div>
@@ -314,9 +314,9 @@ export default function Welcome() {
                             sequa gGmbH • Sustainable Industrial Clusters Programme (SICP) Ethiopia
                         </div>
                         <div className="flex items-center gap-5 text-[11px]">
-                            <Link href="/dashboard" className="hover:text-foreground transition-colors font-medium">Master Ledger</Link>
-                            <Link href="/interview" className="hover:text-foreground transition-colors font-medium">Voice Audit</Link>
-                            <Link href="/demo/feature-phone" className="hover:text-foreground transition-colors font-medium">2G IVR Simulator</Link>
+                            <Link href="/dashboard" className="hover:text-foreground transition-colors font-medium">Records</Link>
+                            <Link href="/interview" className="hover:text-foreground transition-colors font-medium">Voice Check</Link>
+                            <Link href="/demo/feature-phone" className="hover:text-foreground transition-colors font-medium">Phone Call Test</Link>
                             <a href="/dashboard/evidence-pack" className="hover:text-foreground transition-colors font-medium">Evidence Pack (.json)</a>
                         </div>
                     </div>

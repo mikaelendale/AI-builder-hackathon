@@ -71,7 +71,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/dashboard',
     },
     {
-        title: 'Monitoring Ledger',
+        title: 'Records',
         href: '/dashboard',
     },
 ];
@@ -371,7 +371,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Monitoring Dashboard — Direct Beneficiary Verification" />
+            <Head title="Job Check Dashboard" />
 
             <div className="flex-1 space-y-8 p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto">
                 {/* Executive Header Block with Actions */}
@@ -382,10 +382,10 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                             <span>German Development Cooperation • sequa gGmbH</span>
                         </div>
                         <h1 className="text-3xl sm:text-5xl font-serif font-normal tracking-tight text-foreground">
-                            Direct Beneficiary Verification Sheet
+                            Worker Job Check Report
                         </h1>
                         <p className="mt-2 text-xs sm:text-sm text-muted-foreground max-w-3xl leading-relaxed">
-                            Cross-referencing partner enterprise 6-month employment self-reports against independent worker voice audits across 7 statutory criteria, bilateral reconciliation, and tamper-evident hash chaining.
+                            Comparing employer reports with worker interviews across 7 job checks.
                         </p>
                     </div>
 
@@ -402,12 +402,12 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                 {isExportingEvidencePack ? (
                                     <>
                                         <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
-                                        <span>Chaining SHA-256 Digest...</span>
+                                        <span>Creating Proof File...</span>
                                     </>
                                 ) : (
                                     <>
                                         <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                                        <span className="hidden sm:inline">Signed</span> Evidence Pack (.json)
+                                        <span className="hidden sm:inline">Download</span> Proof File (.json)
                                     </>
                                 )}
                             </Button>
@@ -429,7 +429,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                     className="h-8 px-3.5 text-xs font-medium shadow-xs gap-1.5"
                                 >
                                     <Mic className="w-3.5 h-3.5" />
-                                    <span>Live Voice Audit</span>
+                                    <span>Start Voice Check</span>
                                 </Button>
                             </Link>
                         </div>
@@ -455,10 +455,10 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                             </div>
                             <div>
                                 <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                                    Ask the Ledger — Natural-Language Search
+                                    Search Records
                                 </span>
                                 <span className="ml-2 text-[10px] font-mono text-muted-foreground hidden sm:inline">
-                                    Translates natural queries to structured ledger filters
+                                    Search using everyday words
                                 </span>
                             </div>
                         </div>
@@ -486,7 +486,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                 type="text"
                                 value={aiQueryInput}
                                 onChange={(e) => setAiQueryInput(e.target.value)}
-                                placeholder="Ask anything (e.g. 'show disputed cases', 'under-15 safety hard stops', 'Afaan Oromoo textile operators', '100% verified good jobs')..."
+                                placeholder="Ask anything (e.g. 'show mismatched cases', 'under-15 stopped', 'Afaan Oromoo textile operators', '100% passed good jobs')..."
                                 className="w-full h-10 pl-10 pr-4 rounded-xl text-xs bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                             />
                         </div>
@@ -513,11 +513,11 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                         <span className="text-[10px] font-mono text-muted-foreground mr-1">Suggestions:</span>
                         {[
-                            'Show disputed cases',
-                            'Under-15 safety hard stops',
+                            'Show mismatched cases',
+                            'Under-15 stopped',
                             'Afaan Oromoo textile operators',
-                            '100% verified good jobs',
-                            'Bilateral confirmed records',
+                            '100% passed good jobs',
+                            'Both sides agree',
                         ].map((suggestion) => (
                             <button
                                 key={suggestion}
@@ -543,7 +543,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                 onClick={handleClearAiQuery}
                                 className="text-[11px] font-semibold text-primary hover:underline ml-3 shrink-0"
                             >
-                                Reset to Full Cohort
+                                Show All Workers
                             </button>
                         </div>
                     )}
@@ -567,7 +567,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                             <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
                                         </span>
-                                        <span>Direct Voice Audits</span>
+                                        <span>Workers Checked</span>
                                     </div>
                                     <Users className="w-4 h-4 text-muted-foreground/80" />
                                 </div>
@@ -575,15 +575,15 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                     <span className="text-4xl sm:text-5xl font-serif font-medium tracking-tight text-foreground">
                                         {stats.total}
                                     </span>
-                                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">/ 23 Cohort</span>
+                                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">/ 23 Workers</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                                    Full voice audit coverage completed across enterprise placements.
+                                    All workers have been checked by voice interview.
                                 </p>
                             </div>
                             <div className="mt-5 pt-3.5 border-t border-border/50 flex items-center justify-between text-[11px]">
                                 <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400 font-medium">
-                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> 100% Verified
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> ✅ All Checked
                                 </span>
                                 <span className="font-mono text-[10px] text-muted-foreground">
                                     {filterMode === 'all' ? '● Active Filter' : 'Click to show all'}
@@ -602,7 +602,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                         >
                             <div>
                                 <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                                    <span>Verified "Good Jobs"</span>
+                                    <span>Confirmed Good Jobs</span>
                                     <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                                 </div>
                                 <div className="mt-4 flex items-baseline gap-2.5">
@@ -614,7 +614,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                     </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                                    Statutory compliance across all 7 ILO/SICP Decent Work criteria.
+                                    Meets all 7 fair work rules.
                                 </p>
                             </div>
                             <div className="mt-5 pt-3.5 border-t border-emerald-500/20 flex items-center justify-between text-[11px]">
@@ -638,7 +638,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                         >
                             <div>
                                 <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                                    <span>Bilateral Discrepancies</span>
+                                    <span>Mismatches Found</span>
                                     <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                                 </div>
                                 <div className="mt-4 flex items-baseline gap-2.5">
@@ -658,7 +658,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                     Claimed 1 / Audited 0
                                 </span>
                                 <span className="font-mono text-[10px] text-amber-700 dark:text-amber-300 font-semibold">
-                                    {filterMode === 'discrepancies' ? '● Active Filter' : 'Clawback Risk'}
+                                    {filterMode === 'discrepancies' ? '● Active Filter' : '⚠️ Payment Risk'}
                                 </span>
                             </div>
                         </div>
@@ -674,7 +674,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                         >
                             <div>
                                 <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-rose-700 dark:text-rose-300">
-                                    <span>Statutory Hard Stops</span>
+                                    <span>Stopped Cases</span>
                                     <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                                 </div>
                                 <div className="mt-4 flex items-baseline gap-2.5">
