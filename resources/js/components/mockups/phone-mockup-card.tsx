@@ -98,7 +98,7 @@ function PhoneScreen({
     return (
         <div className="relative h-full w-full overflow-hidden rounded-[2.5rem] bg-black">
             {/* Screen — thin ~4px bezel on all sides */}
-            <div className="absolute inset-[3.5px] overflow-hidden rounded-[2.3rem] bg-white dark:bg-neutral-900 flex flex-col">
+            <div className="absolute inset-[3.5px] overflow-hidden rounded-[2.3rem] bg-background text-foreground flex flex-col">
                 {showDynamicIsland ? (
                     <div
                         className="absolute top-[8px] left-1/2 z-30 h-[22px] w-[88px] -translate-x-1/2 rounded-full bg-black flex items-center justify-between px-2.5 shadow-md"

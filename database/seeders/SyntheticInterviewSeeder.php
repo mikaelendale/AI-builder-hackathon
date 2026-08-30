@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\AgentTraceEvent;
 use App\Models\Beneficiary;
 use App\Models\ClauseAssessment;
 use App\Models\HardCaseFlag;
@@ -323,19 +324,19 @@ class SyntheticInterviewSeeder extends Seeder
                 'worker_reported_value' => 1,
                 'transcript' => "I am Getu, 23 years old in Hawassa woodworking collective. 40 hours a week, 7000 ETB monthly. Full safety equipment, free to organize, no discrimination.",
             ],
-            // 23. Almaz - Textile dyeing (Union rights denied discrepancy)
+            // 23. Almaz Tolessa - Oromia Textile Cluster (Afaan Oromo Benchmark Persona)
             [
-                'name' => 'Almaz Zewde',
-                'persona_type' => 'synthetic',
+                'name' => 'Almaz Tolessa',
+                'persona_type' => 'almaz',
                 'phone_type' => 'smartphone',
-                'language' => 'en',
-                'job_position' => 'Textile Dyeing Helper',
+                'language' => 'om',
+                'job_position' => 'Textile Spinning Operator',
                 'gender' => 'Female',
                 'age_band' => '15-24',
-                'monthly_salary_etb' => 5000,
-                'employer_reported_value' => 1, // Employer reported full compliance
-                'worker_reported_value' => 0,
-                'transcript' => "I am Almaz, 21 years old in Kombolcha. I work 40 hours per week, 5000 ETB salary. But factory management banned all workers unions and threatens to fire anyone who attends meetings.",
+                'monthly_salary_etb' => 5800,
+                'employer_reported_value' => 1,
+                'worker_reported_value' => 1,
+                'transcript' => "Maqaan koo Almaaz Toleessaa jedhama. Umriin koo waggaa 22 dha. Paarkii Indaastirii Adaamaa keessatti warshaalee huccuu keessa sa'aatii 40 torbanitti nan hojjedha. Mindaan koo ji'atti qarshii 5800 dha. Waldaa hojjettootaa keessatti bilisaan nan hirmaadha, loogiin hin jiru, hojii dirqiis hin qabu.",
             ],
         ];
 
@@ -507,6 +508,130 @@ class SyntheticInterviewSeeder extends Seeder
                     'checkpoint_date' => now()->toDateString(),
                     'still_employed_same_role' => false,
                     'cumulative_weeks_employed' => 8,
+                ]);
+            }
+
+            // Seed realistic AgentTraceEvent observability sequence
+            $baseTime = $interview->started_at ?: now()->subHours(2);
+
+            // 1. Supervisor dispatch
+            AgentTraceEvent::create([
+                'interview_id' => $interview->id,
+                'agent_name' => 'InterviewSupervisorAgent',
+                'event_type' => 'started',
+                'summary' => 'Dispatching transcript analysis to 2 specialist sub-agents (EmploymentFactsAgent & RightsProtectionsAgent)...',
+                'duration_ms' => null,
+                'detail' => ['transcript_preview' => mb_substr($data['transcript'], 0, 140)],
+                'occurred_at' => $baseTime,
+            ]);
+
+            // 2. EmploymentFactsAgent completed
+            $empFactsSummary = sprintf(
+                'Extracted quantitative facts: age (%s, conf: %.2f), hours (%s, conf: %.2f), wage (%s, conf: %.2f)',
+                $extracted['age']['raw_signal'] ?? 'N/A',
+                $extracted['age']['confidence'] ?? 0.0,
+                $extracted['hours_and_duration']['raw_signal'] ?? 'N/A',
+                $extracted['hours_and_duration']['confidence'] ?? 0.0,
+                $extracted['wage']['raw_signal'] ?? 'N/A',
+                $extracted['wage']['confidence'] ?? 0.0
+            );
+            AgentTraceEvent::create([
+                'interview_id' => $interview->id,
+                'agent_name' => 'EmploymentFactsAgent',
+                'event_type' => 'completed',
+                'summary' => $empFactsSummary,
+                'duration_ms' => rand(120, 240),
+                'detail' => [
+                    'age' => $extracted['age'] ?? null,
+                    'hours_and_duration' => $extracted['hours_and_duration'] ?? null,
+                    'wage' => $extracted['wage'] ?? null,
+                ],
+                'occurred_at' => $baseTime->copy()->addMilliseconds(150),
+            ]);
+
+            // 3. RightsProtectionsAgent completed
+            AgentTraceEvent::create([
+                'interview_id' => $interview->id,
+                'agent_name' => 'RightsProtectionsAgent',
+                'event_type' => 'completed',
+                'summary' => 'Extracted 4 statutory rights topics: child_labor, forced_labor, discrimination, freedom_of_association',
+                'duration_ms' => rand(130, 260),
+                'detail' => [
+                    'child_labor' => $extracted['child_labor'] ?? null,
+                    'forced_labor' => $extracted['forced_labor'] ?? null,
+                    'discrimination' => $extracted['discrimination'] ?? null,
+                    'freedom_of_association' => $extracted['freedom_of_association'] ?? null,
+                ],
+                'occurred_at' => $baseTime->copy()->addMilliseconds(300),
+            ]);
+
+            // 4. ExtractionVerifierAgent check
+            if ($data['name'] === 'Abel Kebede') {
+                AgentTraceEvent::create([
+                    'interview_id' => $interview->id,
+                    'agent_name' => 'ExtractionVerifierAgent',
+                    'event_type' => 'flagged',
+                    'summary' => 'Flagged claim on hours_and_duration: Extracted duration "ከክረምቱ በኋላ" is ambiguous — confidence forced to 0.0',
+                    'duration_ms' => 195,
+                    'detail' => ['topic_key' => 'hours_and_duration', 'quote' => 'ከክረምቱ በኋላ', 'verifier_note' => 'Unanchored relative time expression'],
+                    'occurred_at' => $baseTime->copy()->addMilliseconds(480),
+                ]);
+            } elseif ($data['name'] === 'Henok Worku') {
+                AgentTraceEvent::create([
+                    'interview_id' => $interview->id,
+                    'agent_name' => 'ExtractionVerifierAgent',
+                    'event_type' => 'flagged',
+                    'summary' => 'Flagged claim on hours_and_duration: Quote "harvest season only" is relative — confidence forced to 0.0',
+                    'duration_ms' => 180,
+                    'detail' => ['topic_key' => 'hours_and_duration', 'quote' => 'harvest season only'],
+                    'occurred_at' => $baseTime->copy()->addMilliseconds(480),
+                ]);
+            } else {
+                AgentTraceEvent::create([
+                    'interview_id' => $interview->id,
+                    'agent_name' => 'ExtractionVerifierAgent',
+                    'event_type' => 'completed',
+                    'summary' => 'All 7 statutory claims verified against source transcript without hallucination',
+                    'duration_ms' => rand(150, 280),
+                    'detail' => ['verified_claims_count' => 7],
+                    'occurred_at' => $baseTime->copy()->addMilliseconds(480),
+                ]);
+            }
+
+            // 5. ClauseRuleEngine evaluation
+            $metCount = collect($verdicts)->filter(fn ($v) => $v['status'] === 'met')->count();
+            $unclearCount = collect($verdicts)->filter(fn ($v) => $v['status'] === 'unclear')->count();
+            $notMetCount = collect($verdicts)->filter(fn ($v) => $v['status'] === 'not_met')->count();
+
+            AgentTraceEvent::create([
+                'interview_id' => $interview->id,
+                'agent_name' => 'ClauseRuleEngine',
+                'event_type' => 'rule_verdict',
+                'summary' => "Deterministic statutory evaluation: {$metCount}/7 met, {$unclearCount} unclear, {$notMetCount} not met",
+                'duration_ms' => 8,
+                'detail' => ['verdicts' => $verdicts],
+                'occurred_at' => $baseTime->copy()->addMilliseconds(600),
+            ]);
+
+            if ($isUnder15) {
+                AgentTraceEvent::create([
+                    'interview_id' => $interview->id,
+                    'agent_name' => 'ClauseRuleEngine',
+                    'event_type' => 'flagged',
+                    'summary' => '⛔ Under-15 Hard Stop triggered — interview terminated immediately by safety interlock',
+                    'duration_ms' => null,
+                    'detail' => ['reason' => 'Beneficiary stated age under 15 years old.'],
+                    'occurred_at' => $baseTime->copy()->addMilliseconds(620),
+                ]);
+            } elseif ($data['persona_type'] === 'abel') {
+                AgentTraceEvent::create([
+                    'interview_id' => $interview->id,
+                    'agent_name' => 'InterviewSupervisorAgent',
+                    'event_type' => 'completed',
+                    'summary' => 'Generated targeted follow-up probe on hours_threshold: "በሳምንት ስንት ሰዓት ወይም ስንት ቀናት ይሠራሉ?"',
+                    'duration_ms' => null,
+                    'detail' => ['follow_up_clause' => 'hours_threshold'],
+                    'occurred_at' => $baseTime->copy()->addMilliseconds(650),
                 ]);
             }
         }

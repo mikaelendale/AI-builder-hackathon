@@ -34,6 +34,7 @@ import {
     ShieldAlert,
     ShieldCheck,
     Sparkles,
+    Terminal,
     UserCheck,
     Users,
     X,
@@ -43,6 +44,7 @@ import React, { useMemo, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Checkpoint, ContinuityTimeline } from '@/components/continuity-timeline';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { AgentTrace, type TraceEvent } from '@/components/agent-trace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -119,10 +121,16 @@ interface Interview {
     consent_given: boolean;
     created_at: string;
     beneficiary: Beneficiary;
-    clause_assessments: ClauseAssessment[];
-    hard_case_flags: HardCaseFlag[];
+    clause_assessments?: ClauseAssessment[];
+    clauseAssessments?: ClauseAssessment[];
+    hard_case_flags?: HardCaseFlag[];
+    hardCaseFlags?: HardCaseFlag[];
     employer_confirmation?: EmployerConfirmation | null;
+    employerConfirmation?: EmployerConfirmation | null;
     continuity_checkpoints?: Checkpoint[];
+    continuityCheckpoints?: Checkpoint[];
+    trace_events?: TraceEvent[];
+    traceEvents?: TraceEvent[];
 }
 
 interface SheetRow {
@@ -213,12 +221,57 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
     const [filterMode, setFilterMode] = useState<'all' | 'discrepancies' | 'hard_cases' | 'good_jobs' | 'bilateral'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuditRow, setSelectedAuditRow] = useState<SheetRow | null>(null);
-    const [activeTab, setActiveTab] = useState<'clauses' | 'bilateral' | 'continuity' | 'transcript'>('clauses');
+    const [activeTab, setActiveTab] = useState<'clauses' | 'bilateral' | 'continuity' | 'transcript' | 'trace'>('clauses');
     const [copiedJson, setCopiedJson] = useState(false);
+    const [isExportingEvidencePack, setIsExportingEvidencePack] = useState(false);
+
+    // Feature 4: Natural-Language Dashboard Search ("Ask the Ledger")
+    const [aiQueryInput, setAiQueryInput] = useState('');
+    const [isQueryingAi, setIsQueryingAi] = useState(false);
+    const [aiQuerySummary, setAiQuerySummary] = useState<string | null>(null);
+    const [aiQueryRows, setAiQueryRows] = useState<SheetRow[] | null>(null);
+
+    const csrfToken = () =>
+        (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
+
+    const handleExecuteAiQuery = async (queryText: string) => {
+        if (!queryText.trim()) return;
+        setIsQueryingAi(true);
+        setAiQueryInput(queryText);
+
+        try {
+            const res = await fetch('/dashboard/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({ query: queryText }),
+            });
+            const data = await res.json();
+            if (data.rows) {
+                setAiQueryRows(data.rows);
+                setAiQuerySummary(data.summary || `Found ${data.count} matching records`);
+            }
+        } catch (err) {
+            console.error('[sequa-ledger-query] Error executing query:', err);
+        } finally {
+            setIsQueryingAi(false);
+        }
+    };
+
+    const handleClearAiQuery = () => {
+        setAiQueryRows(null);
+        setAiQuerySummary(null);
+        setAiQueryInput('');
+    };
+
+    // Active base rows (either AI-filtered or master cohort)
+    const activeBaseRows = aiQueryRows ?? rows;
 
     // Filter computation
     const filteredRows = useMemo(() => {
-        return rows.filter((r) => {
+        return activeBaseRows.filter((r) => {
             if (filterMode === 'discrepancies' && !r.discrepancy_flag) return false;
             if (filterMode === 'hard_cases' && (!r.interview?.hard_case_flags || r.interview.hard_case_flags.length === 0)) return false;
             if (filterMode === 'good_jobs' && !r.is_good_job) return false;
@@ -235,7 +288,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
 
             return true;
         });
-    }, [rows, filterMode, searchQuery]);
+    }, [activeBaseRows, filterMode, searchQuery]);
 
     const selectedRowIndex = useMemo(() => {
         if (!selectedAuditRow) return -1;
@@ -309,7 +362,11 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
     }, [rows]);
 
     const handleDownloadEvidencePack = () => {
-        window.location.href = '/dashboard/evidence-pack';
+        setIsExportingEvidencePack(true);
+        setTimeout(() => {
+            setIsExportingEvidencePack(false);
+            window.location.href = '/dashboard/evidence-pack';
+        }, 650);
     };
 
     return (
@@ -339,10 +396,20 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                 variant="outline"
                                 size="sm"
                                 onClick={handleDownloadEvidencePack}
+                                disabled={isExportingEvidencePack}
                                 className="h-8 px-3 text-xs shadow-xs gap-1.5 font-medium"
                             >
-                                <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                                <span className="hidden sm:inline">Signed</span> Evidence Pack (.json)
+                                {isExportingEvidencePack ? (
+                                    <>
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                                        <span>Chaining SHA-256 Digest...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <span className="hidden sm:inline">Signed</span> Evidence Pack (.json)
+                                    </>
+                                )}
                             </Button>
 
                             <Link href="/demo/feature-phone">
@@ -379,8 +446,111 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                     </div>
                 </div>
 
-                    {/* Strategic Metric Cards (4 Cards Grid - Bold Executive KPI Strip) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                {/* Feature 4: Natural-Language Dashboard Search ("Ask the Ledger") */}
+                <div className="rounded-2xl border border-border/80 bg-card/90 backdrop-blur-md p-4 sm:p-5 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="size-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                <Sparkles className="size-3.5" />
+                            </div>
+                            <div>
+                                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                    Ask the Ledger — Natural-Language Search
+                                </span>
+                                <span className="ml-2 text-[10px] font-mono text-muted-foreground hidden sm:inline">
+                                    Translates natural queries to structured ledger filters
+                                </span>
+                            </div>
+                        </div>
+                        {aiQueryRows !== null && (
+                            <button
+                                type="button"
+                                onClick={handleClearAiQuery}
+                                className="text-[11px] font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 hover:underline"
+                            >
+                                <X className="size-3" /> Clear AI Filter
+                            </button>
+                        )}
+                    </div>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            handleExecuteAiQuery(aiQueryInput);
+                        }}
+                        className="flex items-center gap-2"
+                    >
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={aiQueryInput}
+                                onChange={(e) => setAiQueryInput(e.target.value)}
+                                placeholder="Ask anything (e.g. 'show disputed cases', 'under-15 safety hard stops', 'Afaan Oromoo textile operators', '100% verified good jobs')..."
+                                className="w-full h-10 pl-10 pr-4 rounded-xl text-xs bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            disabled={isQueryingAi || !aiQueryInput.trim()}
+                            className="h-10 px-4 text-xs font-semibold rounded-xl bg-primary text-primary-foreground flex items-center gap-1.5 shadow-xs shrink-0"
+                        >
+                            {isQueryingAi ? (
+                                <>
+                                    <RefreshCw className="size-3.5 animate-spin" />
+                                    <span>Searching...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="size-3.5" />
+                                    <span>Query</span>
+                                </>
+                            )}
+                        </Button>
+                    </form>
+
+                    {/* Suggestion Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] font-mono text-muted-foreground mr-1">Suggestions:</span>
+                        {[
+                            'Show disputed cases',
+                            'Under-15 safety hard stops',
+                            'Afaan Oromoo textile operators',
+                            '100% verified good jobs',
+                            'Bilateral confirmed records',
+                        ].map((suggestion) => (
+                            <button
+                                key={suggestion}
+                                type="button"
+                                onClick={() => handleExecuteAiQuery(suggestion)}
+                                className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 transition-colors"
+                            >
+                                ✨ {suggestion}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Conversational Query Confirmation Banner */}
+                    {aiQuerySummary && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs text-foreground">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="size-4 text-primary shrink-0" />
+                                <span className="font-medium">{aiQuerySummary}</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">({filteredRows.length} matching rows)</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleClearAiQuery}
+                                className="text-[11px] font-semibold text-primary hover:underline ml-3 shrink-0"
+                            >
+                                Reset to Full Cohort
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Strategic Metric Cards (4 Cards Grid - Bold Executive KPI Strip) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                         {/* 1. Total Beneficiaries Audited */}
                         <div
                             onClick={() => setFilterMode('all')}
@@ -392,7 +562,13 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                         >
                             <div>
                                 <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                                    <span>Direct Voice Audits</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="relative flex size-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
+                                        </span>
+                                        <span>Direct Voice Audits</span>
+                                    </div>
                                     <Users className="w-4 h-4 text-muted-foreground/80" />
                                 </div>
                                 <div className="mt-4 flex items-baseline gap-2.5">
@@ -756,12 +932,17 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                                     <span>{b?.name || `Worker #${row.id}`}</span>
                                                                     {b?.persona_type === 'selam' && (
                                                                         <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                                                                            Selam
+                                                                            Selam (EN)
                                                                         </span>
                                                                     )}
                                                                     {b?.persona_type === 'abel' && (
                                                                         <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-                                                                            Abel
+                                                                            Abel (AM)
+                                                                        </span>
+                                                                    )}
+                                                                    {b?.persona_type === 'almaz' && (
+                                                                        <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                                                                            Almaz (OM)
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -771,6 +952,8 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                                     <span>{row.age_band}</span>
                                                                     <span>•</span>
                                                                     <span>{b?.phone_type === 'feature_phone' ? '2G IVR' : 'Smartphone'}</span>
+                                                                    <span>•</span>
+                                                                    <span className="uppercase text-[9px] font-bold text-muted-foreground/80">{b?.language || 'en'}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -793,20 +976,41 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                         <div className="flex flex-col gap-1">
                                                             <div>
                                                                 {row.is_good_job ? (
-                                                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                                                                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                                                        Verified Good Job (1)
-                                                                    </span>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 cursor-help">
+                                                                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                                                                Verified Good Job (1)
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent className="text-xs p-2 max-w-xs">
+                                                                            Confirmed by independent worker audit across all 7 statutory criteria (Claimed 1 / Audited 1).
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
                                                                 ) : isDiscrepant ? (
-                                                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-                                                                        <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                                                                        Discrepancy (0)
-                                                                    </span>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 cursor-help">
+                                                                                <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                                                                Discrepancy (0)
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent className="text-xs p-2 max-w-xs">
+                                                                            Worker and employer don't agree — flagged for review and clawback (Claimed 1 / Audited 0).
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
                                                                 ) : (
-                                                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-destructive px-2 py-0.5 rounded-md bg-destructive/10 border border-destructive/20">
-                                                                        <XCircle className="w-3 h-3 text-destructive" />
-                                                                        Hard Stop (0)
-                                                                    </span>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-destructive px-2 py-0.5 rounded-md bg-destructive/10 border border-destructive/20 cursor-help">
+                                                                                <XCircle className="w-3 h-3 text-destructive" />
+                                                                                Hard Stop (0)
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent className="text-xs p-2 max-w-xs">
+                                                                            Statutory safety interlock triggered — interview terminated early (Under-15 Minor).
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
                                                                 )}
                                                             </div>
                                                             <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
@@ -1144,6 +1348,21 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                         >
                                             Transcript & Signal
                                         </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('trace')}
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                                activeTab === 'trace'
+                                                    ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                                            }`}
+                                        >
+                                            <Terminal className="size-3" />
+                                            <span>Agent Trace</span>
+                                            <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-mono border-border/60">
+                                                {selectedAuditRow.interview?.trace_events?.length || selectedAuditRow.interview?.traceEvents?.length || 0}
+                                            </Badge>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1342,6 +1561,18 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                     {selectedAuditRow.interview?.transcript_raw || 'No raw transcript recorded.'}
                                                 </div>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* Tab 5: Agent Observability Trace */}
+                                    {activeTab === 'trace' && (
+                                        <div className="space-y-3">
+                                            <AgentTrace
+                                                interviewId={selectedAuditRow.interview?.id}
+                                                initialEvents={selectedAuditRow.interview?.trace_events || selectedAuditRow.interview?.traceEvents || []}
+                                                isLiveStreaming={false}
+                                                className="min-h-[440px]"
+                                            />
                                         </div>
                                     )}
                                 </div>

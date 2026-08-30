@@ -49,8 +49,9 @@ class ClauseRuleEngine
 
         $signal = $topic['raw_signal'] ?? '';
 
-        if (preg_match('/\b(1[5-9]|[2-9]\d)\b/', $signal, $m)) {
-            $age = (int) $m[1];
+        // Match age in English, Amharic, or Afaan Oromo (waggaa 19 / 19 waggaa)
+        if (preg_match('/(?:\bwaggaa\s*(\d{1,2})|\b(1[5-9]|[2-9]\d)\b)/iu', $signal, $m)) {
+            $age = (int) (!empty($m[1]) ? $m[1] : $m[2]);
 
             return $age < 15
                 ? $this->result('not_met', $topic, "Stated age {$age} is under 15.", 'age_15_plus')
@@ -73,8 +74,9 @@ class ClauseRuleEngine
 
         $signal = $topic['raw_signal'] ?? '';
 
-        // Weekly hours match (e.g. 40 hours per week, 25 hrs/wk, 35 ሰዓት)
-        if (preg_match('/\b(\d+)\s*(?:hour|hr|ሰዓት)s?(?:\/|\s*per\s*|\s*በ|\s*a\s*)?\s*(?:week|wk|ሳምንት)?/iu', $signal, $m)) {
+        // Weekly hours match (e.g. 40 hours per week, 25 hrs/wk, 35 ሰዓት, sa'aatii 40)
+        if (preg_match('/\b(\d+)\s*(?:hour|hr|ሰዓት|sa[\'ʼ]?aatii)s?(?:\/|\s*per\s*|\s*በ|\s*a\s*|\s*torbanitti\s*)?\s*(?:week|wk|ሳምንት|torban)?/iu', $signal, $m)
+            || preg_match('/(?:sa[\'ʼ]?aatii|hours?)\s*(\d+)/iu', $signal, $m)) {
             $hoursPerWeek = (int) $m[1];
 
             return $hoursPerWeek >= 20
@@ -83,7 +85,7 @@ class ClauseRuleEngine
         }
 
         // Daily hours match e.g. "8 hours a day, 5 days a week" -> 40 hrs
-        if (preg_match('/(\d+)\s*(?:hour|hr)s?\s*(?:a|per)?\s*day.*(\d+)\s*days/i', $signal, $m)) {
+        if (preg_match('/(\d+)\s*(?:hour|hr|sa[\'ʼ]?aatii)s?\s*(?:a|per|guyyaatti)?\s*(?:day|guyyaa).*(\d+)\s*(?:days|guyyaa)/iu', $signal, $m)) {
             $daily = (int) $m[1];
             $days = (int) $m[2];
             $total = $daily * $days;
@@ -104,7 +106,8 @@ class ClauseRuleEngine
 
         $signal = $topic['raw_signal'] ?? '';
 
-        if (preg_match('/(\d{3,6})\s*(?:etb|birr|ብር)?/i', $signal, $m)) {
+        if (preg_match('/(\d{3,6})\s*(?:etb|birr|ብር|qarshii|birrii)?/iu', $signal, $m)
+            || preg_match('/(?:qarshii|birr)\s*(\d{3,6})/iu', $signal, $m)) {
             $wage = (int) $m[1];
 
             return $wage >= self::MIN_WAGE_ETB_MONTHLY
@@ -112,7 +115,7 @@ class ClauseRuleEngine
                 : $this->result('not_met', $topic, "Reported wage {$wage} ETB is below the statutory baseline.", 'min_wage');
         }
 
-        if (str_contains(strtolower($signal), 'cash') || str_contains($signal, 'ጥሬ ገንዘብ')) {
+        if (str_contains(strtolower($signal), 'cash') || str_contains($signal, 'ጥሬ ገንዘብ') || str_contains(strtolower($signal), 'callaa')) {
             return $this->unclear($topic, 'Paid cash daily without stated monthly total — requires follow-up.', 'min_wage');
         }
 
@@ -126,14 +129,14 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $cleanKeywords = ['no child', 'not child', 'no underage', 'adult', 'started as adult'];
+        $cleanKeywords = ['no child', 'not child', 'no underage', 'adult', 'started as adult', 'ijoollee miti', 'waggaa guutuu'];
         foreach ($cleanKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('met', $topic, 'No child labour indicators found.', 'no_child_labor');
             }
         }
 
-        $violationKeywords = ['minor start', 'child labor', 'child labour', 'underage', 'started when 12', 'started at 12', 'started at 13', 'started at 14', 'minor work'];
+        $violationKeywords = ['minor start', 'child labor', 'child labour', 'underage', 'started when 12', 'started at 12', 'started at 13', 'started at 14', 'minor work', 'ijoollummaa', 'waggaa 12', 'waggaa 13', 'waggaa 14'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Evidence of minor/child labour indicated.', 'no_child_labor');
@@ -150,14 +153,14 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $cleanKeywords = ['no forced', 'not forced', 'voluntary', 'freedom of movement', 'free to leave', 'free to work'];
+        $cleanKeywords = ['no forced', 'not forced', 'voluntary', 'freedom of movement', 'free to leave', 'free to work', 'bilisaan', 'fedhaan', 'deemuu danda'];
         foreach ($cleanKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('met', $topic, 'Voluntary employment with freedom of movement.', 'no_forced_labor');
             }
         }
 
-        $violationKeywords = ['cannot leave', 'locked', 'coerced', 'threatened', 'withheld documents', 'trapped', 'forced conditions present'];
+        $violationKeywords = ['cannot leave', 'locked', 'coerced', 'threatened', 'withheld documents', 'trapped', 'forced conditions present', 'dirqisiifamee', 'hidhamee', 'bahuu hin danda'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Signal indicates forced or involuntary conditions.', 'no_forced_labor');
@@ -174,7 +177,7 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $cleanKeywords = ['no discrimination', 'no harassment', 'no unequal', 'not discriminated', 'treated same', 'equal', 'fair', 'no problem', 'treated equally', 'face no discrimination'];
+        $cleanKeywords = ['no discrimination', 'no harassment', 'no unequal', 'not discriminated', 'treated same', 'equal', 'fair', 'no problem', 'treated equally', 'face no discrimination', 'qixxee', 'walqixa', 'garaagarummaa hin qabu'];
 
         foreach ($cleanKeywords as $kw) {
             if (str_contains($signal, $kw)) {
@@ -182,7 +185,7 @@ class ClauseRuleEngine
             }
         }
 
-        $violationKeywords = ['discrimination reported', 'unequal pay', 'unfair treatment', 'gender bias', 'harassment reported', 'harassed', 'discriminated'];
+        $violationKeywords = ['discrimination reported', 'unequal pay', 'unfair treatment', 'gender bias', 'harassment reported', 'harassed', 'discriminated', 'loogii', 'miidhaan', 'garaagarummaa'];
         foreach ($violationKeywords as $kw) {
             if (str_contains($signal, $kw)) {
                 return $this->result('not_met', $topic, 'Evidence of discrimination or harassment present.', 'no_discrimination');
@@ -199,8 +202,8 @@ class ClauseRuleEngine
         }
 
         $signal = strtolower($topic['raw_signal'] ?? '');
-        $deniedKeywords = ['not allowed', 'banned', 'prohibited', 'denied', 'no union allowed', 'forbidden'];
-        $allowedKeywords = ['free to join', 'allowed', 'can join', 'union', 'association', 'permitted', 'yes', 'group'];
+        $deniedKeywords = ['not allowed', 'banned', 'prohibited', 'denied', 'no union allowed', 'forbidden', 'dhorkameera', 'hin hayyamamu'];
+        $allowedKeywords = ['free to join', 'allowed', 'can join', 'union', 'association', 'permitted', 'yes', 'group', 'waldaa', 'miseensa'];
 
         foreach ($deniedKeywords as $kw) {
             if (str_contains($signal, $kw)) {

@@ -14,9 +14,9 @@ return new class extends Migration
         Schema::create('beneficiaries', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->enum('persona_type', ['selam', 'abel', 'synthetic']);
+            $table->string('persona_type')->default('synthetic'); // 'selam' | 'abel' | 'almaz' | 'synthetic'
             $table->enum('phone_type', ['smartphone', 'feature_phone']);
-            $table->string('language'); // 'en' | 'am'
+            $table->string('language'); // 'en' | 'am' | 'om'
             $table->timestamps();
         });
     }

@@ -61,4 +61,9 @@ class Interview extends Model
     {
         return $this->hasMany(ContinuityCheckpoint::class);
     }
+
+    public function traceEvents(): HasMany
+    {
+        return $this->hasMany(AgentTraceEvent::class)->orderBy('occurred_at', 'asc')->orderBy('id', 'asc');
+    }
 }

@@ -9,10 +9,12 @@ use Inertia\Inertia;
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::post('/dashboard/query', [DashboardController::class, 'query'])->name('dashboard.query');
 Route::get('/dashboard/evidence-pack', [DashboardController::class, 'exportEvidencePack'])->name('dashboard.evidence-pack');
 
 Route::get('/interview', [InterviewController::class, 'create'])->name('interview.create');
 Route::get('/interviews/{interview}', [InterviewController::class, 'show'])->name('interview.show');
+Route::get('/interviews/{interview}/trace', [InterviewController::class, 'trace'])->name('interview.trace');
 Route::post('/beneficiaries/{beneficiary}/interviews', [InterviewController::class, 'start'])->name('interview.start');
 Route::post('/beneficiaries/quick-create', [InterviewController::class, 'quickCreateBeneficiary'])->name('beneficiary.quick-create');
 Route::post('/interviews/{interview}/transcript', [InterviewController::class, 'submitTranscript'])->name('interview.transcript');

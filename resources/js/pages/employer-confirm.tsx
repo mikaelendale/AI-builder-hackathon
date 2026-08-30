@@ -82,12 +82,12 @@ export default function EmployerConfirmPage({
         <>
             <Head title="Partner Employer Bilateral Confirmation — sequa Ethiopia" />
 
-            <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-200">
+            <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-200">
                 {/* Top Navigation */}
                 <div className="w-full max-w-xl mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="font-semibold text-neutral-900 dark:text-white">Partner Enterprise Portal</span>
+                        <span className="font-semibold text-foreground">Partner Enterprise Portal</span>
                         <span>• Official Verification</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -96,30 +96,30 @@ export default function EmployerConfirmPage({
                 </div>
 
                 {/* Main Confirmation Card */}
-                <Card className="w-full max-w-xl bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 shadow-xl">
-                    <CardHeader className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <Card className="w-full max-w-xl bg-card border-border shadow-xl">
+                    <CardHeader className="border-b border-border pb-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <FileCheck2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                                <CardTitle className="text-lg font-bold">
+                                <CardTitle className="text-lg font-bold text-foreground">
                                     Bilateral Employment Confirmation
                                 </CardTitle>
                             </div>
                             {confirmation.is_expired ? (
-                                <Badge className="bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800">
+                                <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20">
                                     Expired (72h elapsed)
                                 </Badge>
                             ) : submittedStatus ? (
-                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800">
+                                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
                                     Submitted: {submittedStatus.toUpperCase()}
                                 </Badge>
                             ) : (
-                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800">
+                                <Badge className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20">
                                     Pending Employer Input
                                 </Badge>
                             )}
                         </div>
-                        <CardDescription className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                        <CardDescription className="text-xs text-muted-foreground mt-1">
                             Per sequa Ethiopia 6-month monitoring guidelines: 6-month continuity can be confirmed either by worker or employer.
                         </CardDescription>
                     </CardHeader>
@@ -127,8 +127,8 @@ export default function EmployerConfirmPage({
                     <CardContent className="pt-5 space-y-5 text-xs sm:text-sm">
                         {/* Expiration Notice */}
                         {confirmation.is_expired && (
-                            <Alert className="border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200">
-                                <ShieldAlert className="h-4 w-4 text-rose-600" />
+                            <Alert className="border-destructive/30 bg-destructive/10 text-destructive">
+                                <ShieldAlert className="h-4 w-4 text-destructive" />
                                 <AlertTitle className="text-xs font-bold">Link Expired</AlertTitle>
                                 <AlertDescription className="text-xs mt-1">
                                     This single-use confirmation token has expired. The worker's independent interview verdict will stand alone per programme rules.
@@ -137,20 +137,20 @@ export default function EmployerConfirmPage({
                         )}
 
                         {/* Privacy / PII Safe Header */}
-                        <div className="p-3.5 bg-neutral-100 dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+                        <div className="p-3.5 bg-muted/40 rounded-xl border border-border flex items-center justify-between">
                             <div>
-                                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block">Position / Role Under Review</span>
-                                <span className="text-sm font-bold text-neutral-900 dark:text-white">{job_position}</span>
+                                <span className="text-[11px] text-muted-foreground block">Position / Role Under Review</span>
+                                <span className="text-sm font-bold text-foreground">{job_position}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400">
-                                <Lock className="w-3.5 h-3.5 text-neutral-400" />
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Lock className="w-3.5 h-3.5" />
                                 <span>PII Redacted</span>
                             </div>
                         </div>
 
                         {/* Submitted Success Banner */}
                         {submittedStatus && (
-                            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 space-y-1.5">
+                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 space-y-1.5">
                                 <div className="font-bold flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                                     Bilateral Confirmation Recorded
@@ -165,11 +165,11 @@ export default function EmployerConfirmPage({
                         {!confirmation.is_expired && (
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
-                                    <label className="font-semibold text-neutral-800 dark:text-neutral-200 text-xs">
+                                    <label className="font-semibold text-foreground text-xs">
                                         1. Average Hours Worked Per Week:
                                     </label>
                                     <div className="relative">
-                                        <Clock className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
+                                        <Clock className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
                                         <input
                                             type="number"
                                             min={0}
@@ -178,20 +178,20 @@ export default function EmployerConfirmPage({
                                             value={hoursPerWeek}
                                             onChange={(e) => setHoursPerWeek(e.target.value === '' ? '' : Number(e.target.value))}
                                             placeholder="e.g. 40"
-                                            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                                            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-emerald-500"
                                         />
                                     </div>
-                                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                                    <p className="text-[10px] text-muted-foreground">
                                         Statutory requirement: ≥ 20 hours per week.
                                     </p>
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="font-semibold text-neutral-800 dark:text-neutral-200 text-xs">
+                                    <label className="font-semibold text-foreground text-xs">
                                         2. Total Consecutive Months Employed:
                                     </label>
                                     <div className="relative">
-                                        <Building2 className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
+                                        <Building2 className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
                                         <input
                                             type="number"
                                             min={0}
@@ -200,16 +200,16 @@ export default function EmployerConfirmPage({
                                             value={monthsEmployed}
                                             onChange={(e) => setMonthsEmployed(e.target.value === '' ? '' : Number(e.target.value))}
                                             placeholder="e.g. 6"
-                                            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                                            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-emerald-500"
                                         />
                                     </div>
-                                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                                    <p className="text-[10px] text-muted-foreground">
                                         Statutory requirement: ≥ 6 months (26 weeks) or 520 hours/year.
                                     </p>
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="font-semibold text-neutral-800 dark:text-neutral-200 text-xs">
+                                    <label className="font-semibold text-foreground text-xs">
                                         3. Employer Comments / Notes (Optional):
                                     </label>
                                     <textarea
@@ -218,7 +218,7 @@ export default function EmployerConfirmPage({
                                         value={note}
                                         onChange={(e) => setNote(e.target.value)}
                                         placeholder="Add any context on seasonal shifts, payroll records, or attendance logs..."
-                                        className="w-full p-2.5 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                                        className="w-full p-2.5 text-xs sm:text-sm bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-emerald-500"
                                     />
                                 </div>
 
@@ -239,7 +239,7 @@ export default function EmployerConfirmPage({
                                             variant="outline"
                                             disabled={isSubmitting}
                                             onClick={() => handleSubmit('disputed')}
-                                            className="w-full sm:w-auto border-neutral-300 dark:border-neutral-700 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs h-10"
+                                            className="w-full sm:w-auto border-border text-rose-700 dark:text-rose-400 hover:bg-destructive/10 text-xs h-10"
                                         >
                                             <XCircle className="w-4 h-4 mr-1.5" /> Dispute Record
                                         </Button>
@@ -251,7 +251,7 @@ export default function EmployerConfirmPage({
                 </Card>
 
                 {/* Footer Note */}
-                <div className="w-full max-w-xl mt-4 text-center text-[11px] text-neutral-500 dark:text-neutral-400">
+                <div className="w-full max-w-xl mt-4 text-center text-[11px] text-muted-foreground">
                     sequa Ethiopia • Sustainable Industrial Clusters Programme (SICP) • Verification Engine
                 </div>
             </div>

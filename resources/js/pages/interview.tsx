@@ -1,12 +1,14 @@
 import { Head, router } from '@inertiajs/react';
 import {
     AlertCircle,
+    AlertTriangle,
     Award,
     Check,
     CheckCircle2,
     ChevronDown,
     ChevronUp,
     Clock,
+    Cpu,
     DollarSign,
     Globe,
     HelpCircle,
@@ -30,6 +32,7 @@ import {
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { PhoneMockupCard } from '@/components/mockups/phone-mockup-card';
+import { AgentTrace, type TraceEvent } from '@/components/agent-trace';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -88,6 +91,8 @@ interface InterviewProps {
             type: string;
             detail: string;
         }>;
+        trace_events?: TraceEvent[];
+        traceEvents?: TraceEvent[];
     } | null;
 }
 
@@ -123,10 +128,22 @@ const PERSONA_SCRIPTS = {
         lang: 'am' as const,
         type: 'abel' as const,
         tag: 'Unclear (AM)',
-        description: "Ambiguous case. Amharic. The hours clause resolves unclear, triggering targeted follow-up.",
+        description: "Ambiguous case. Amharic. The hours clause resolves unclear, triggering context-aware follow-up.",
         script:
             'ስሜ አቤል ከበደ ይባላል። ዕድሜዬ 19 ዓመት ነው። በአዳማ ከተማ አቅራቢያ በኮንስትራክሽን ቦታ ላይ በቀን ሠራተኛነት እሠራለሁ። ክፍያዬን በጥሬ ገንዘብ ነው የማገኘው። ሥራውን የጀመርኩት ከክረምቱ በኋላ ነው፣ አምስት ወይም ሰባት ወር ሊሆን ይችላል፣ ሥራ በተገኘበት ቀን ብቻ ነው የምሠራው።',
         followUpAnswer: 'በተለመደው ሳምንት ውስጥ 35 ሰዓት እሠራለሁ፣ እና ከጀመርኩ 6 ወር ሆኖኛል።',
+    },
+    almaz: {
+        name: 'Almaz Tolessa',
+        age: 22,
+        role: 'Textile Operator (Oromia / Adama)',
+        lang: 'om' as const,
+        type: 'almaz' as const,
+        tag: 'Afaan Oromoo (OM)',
+        description: "Afaan Oromoo case. Addis AI Voice (om). Relative duration ('rooba booda') triggers context-aware follow-up.",
+        script:
+            "Maqaan koo Almaaz Toleessaa jedhama. Umriin koo waggaa 22 dha. Paarkii Indaastirii Adaamaa keessatti warshaalee huccuu keessa nan hojjedha. Rooba booda ji'oota muraasaaf nan hojjedhe. Mindaan koo ji'atti qarshii 5800 dha.",
+        followUpAnswer: "Torbanitti sa'aatii 40 nan hojjedha, hojii kana jalqabee ji'a 6 guuteera.",
     },
     minor: {
         name: 'Yordanos Girma',
@@ -142,8 +159,8 @@ const PERSONA_SCRIPTS = {
 };
 
 export default function InterviewPage({ beneficiaries, interview: initialInterview }: InterviewProps) {
-    const [selectedPersona, setSelectedPersona] = useState<'selam' | 'abel' | 'minor' | 'custom'>('selam');
-    const [languageMode, setLanguageMode] = useState<'en' | 'am'>('en');
+    const [selectedPersona, setSelectedPersona] = useState<'selam' | 'abel' | 'almaz' | 'minor' | 'custom'>('selam');
+    const [languageMode, setLanguageMode] = useState<'en' | 'am' | 'om'>('en');
     const [currentInterviewId, setCurrentInterviewId] = useState<number | null>(initialInterview?.id || null);
     const [consentGiven, setConsentGiven] = useState(true);
     const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
@@ -151,6 +168,10 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     const [isListening, setIsListening] = useState(false);
     const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [clauseProcessingPhase, setClauseProcessingPhase] = useState<'idle' | 'extracting' | 'verifying' | 'resolved'>('idle');
+    const [traceEvents, setTraceEvents] = useState<TraceEvent[]>(() => {
+        return initialInterview?.trace_events || (initialInterview as any)?.traceEvents || [];
+    });
     const [liveInterimSpeech, setLiveInterimSpeech] = useState('');
     const [stoppedHardCase, setStoppedHardCase] = useState(false);
     const [hardCaseDetail, setHardCaseDetail] = useState<string | null>(null);
@@ -215,6 +236,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 setStoppedHardCase(true);
                 setHardCaseDetail(initialInterview.hard_case_flags[0]?.detail || 'Under 15 hard stop');
             }
+            if (initialInterview.trace_events || (initialInterview as any).traceEvents) {
+                setTraceEvents(initialInterview.trace_events || (initialInterview as any).traceEvents);
+            }
         }
     }, [initialInterview]);
 
@@ -264,7 +288,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
     };
 
-    const initializeInterview = async (personaKey: 'selam' | 'abel' | 'minor'): Promise<number> => {
+    const initializeInterview = async (personaKey: 'selam' | 'abel' | 'almaz' | 'minor'): Promise<number> => {
         const p = PERSONA_SCRIPTS[personaKey];
         let target = beneficiaries.find((b) => b.persona_type === p.type);
         if (!target && beneficiaries.length > 0) target = beneficiaries[0];
@@ -404,6 +428,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         }
         setLiveInterimSpeech('');
 
+        setClauseProcessingPhase('extracting');
+        const phaseTimer = setTimeout(() => {
+            setClauseProcessingPhase((prev) => (prev === 'extracting' ? 'verifying' : prev));
+        }, 450);
+
         try {
             const formData = new FormData();
             formData.append('audio', audioBlob, 'turn.webm');
@@ -430,6 +459,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                 console.log('[sequa-followup] Follow-up probes:', data.follow_ups);
                 setFollowUps(data.follow_ups);
             }
+            if (data.trace_events) {
+                setTraceEvents(data.trace_events);
+            }
             if (data.stopped) {
                 setStoppedHardCase(true);
                 setHardCaseDetail(data.agent_text);
@@ -451,6 +483,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         } catch (err) {
             console.error('[sequa-voice] Error sending turn:', err);
         } finally {
+            clearTimeout(phaseTimer);
+            setClauseProcessingPhase('resolved');
             setIsProcessing(false);
         }
     };
@@ -509,12 +543,12 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         stopMicrophoneCapture();
     };
 
-    const handleLanguageChange = (lang: 'en' | 'am') => {
+    const handleLanguageChange = (lang: 'en' | 'am' | 'om') => {
         setLanguageMode(lang);
         languageModeRef.current = lang;
     };
 
-    const handleTriggerPersonaDemo = async (personaKey: 'selam' | 'abel' | 'minor') => {
+    const handleTriggerPersonaDemo = async (personaKey: 'selam' | 'abel' | 'almaz' | 'minor') => {
         endLiveCall();
         setSelectedPersona(personaKey);
         const p = PERSONA_SCRIPTS[personaKey];
@@ -525,11 +559,17 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         Object.keys(CLAUSE_DEFINITIONS).forEach((k) => { reset[k] = { status: 'pending', confidence: 0 }; });
         setVerdicts(reset);
         setFollowUps([]);
+        setTraceEvents([]);
 
         const intId = await initializeInterview(personaKey);
         setChatTurns([{ sender: 'worker', text: p.script, timestamp: 'Now' }]);
 
         setIsProcessing(true);
+        setClauseProcessingPhase('extracting');
+        const phaseTimer = setTimeout(() => {
+            setClauseProcessingPhase((prev) => (prev === 'extracting' ? 'verifying' : prev));
+        }, 450);
+
         try {
             const res = await fetch(`/interviews/${intId}/converse`, {
                 method: 'POST',
@@ -541,6 +581,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
             if (data.verdicts) setVerdicts(data.verdicts);
             if (data.follow_ups) setFollowUps(data.follow_ups);
+            if (data.trace_events) setTraceEvents(data.trace_events);
             if (data.stopped) { setStoppedHardCase(true); setHardCaseDetail(data.agent_text); }
 
             setChatTurns((prev) => [
@@ -551,6 +592,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         } catch (e) {
             console.error(e);
         } finally {
+            clearTimeout(phaseTimer);
+            setClauseProcessingPhase('resolved');
             setIsProcessing(false);
         }
     };
@@ -558,6 +601,11 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     const handleSendFollowUpAnswer = async (answerText: string) => {
         if (!currentInterviewIdRef.current) return;
         setIsProcessing(true);
+        setClauseProcessingPhase('extracting');
+        const phaseTimer = setTimeout(() => {
+            setClauseProcessingPhase((prev) => (prev === 'extracting' ? 'verifying' : prev));
+        }, 450);
+
         setChatTurns((prev) => [...prev, { sender: 'worker', text: answerText, timestamp: 'Now' }]);
 
         try {
@@ -571,6 +619,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
             if (data.verdicts) setVerdicts(data.verdicts);
             if (data.follow_ups) setFollowUps(data.follow_ups);
+            if (data.trace_events) setTraceEvents(data.trace_events);
 
             setChatTurns((prev) => [
                 ...prev,
@@ -580,6 +629,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         } catch (err) {
             console.error(err);
         } finally {
+            clearTimeout(phaseTimer);
+            setClauseProcessingPhase('resolved');
             setIsProcessing(false);
         }
     };
@@ -619,432 +670,568 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
     return (
         <>
-            <Head title="Beneficiary Voice Verification — sequa Audit" />
+            <Head title="Beneficiary Voice Verification — sequa Multi-Agent Audit" />
 
-            <div className="min-h-screen bg-background text-foreground py-2 sm:py-4 px-2 flex flex-col items-center justify-start transition-colors duration-200">
-                <div className="w-full max-w-[380px] mb-2 flex items-center justify-between px-2 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span className="font-semibold tracking-tight text-[11px] text-foreground">sequa Verification Engine</span>
+            <div className="min-h-screen bg-background text-foreground py-4 sm:py-6 px-3 sm:px-6 flex flex-col items-center justify-start transition-colors duration-200">
+                {/* Executive Top Bar */}
+                <div className="w-full max-w-6xl mb-4 flex items-center justify-between px-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2.5 font-medium">
+                        <span className="relative flex size-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="font-semibold tracking-tight text-xs text-foreground">sequa Multi-Agent Verification Harness</span>
+                        <span className="hidden md:inline-block text-[10px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full border border-border/60">
+                            Supervisor Fan-Out • Verifier-Critic Reflection
+                        </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 p-0.5 bg-muted rounded-full border border-border">
-                            {(['titanium', 'purple', 'orange', 'white', 'cherry'] as const).map((v) => (
-                                <button
-                                    key={v}
-                                    type="button"
-                                    onClick={() => setPhoneVariant(v)}
-                                    title={`Finish: ${v}`}
-                                    className={`w-3 h-3 rounded-full transition-transform ${
-                                        phoneVariant === v ? 'ring-2 ring-primary scale-110' : 'opacity-60 hover:opacity-100'
-                                    } ${
-                                        v === 'titanium' ? 'bg-[#3b3a39]'
-                                            : v === 'purple' ? 'bg-[#4a4254]'
-                                            : v === 'orange' ? 'bg-[#d4845a]'
-                                            : v === 'white' ? 'bg-[#e4e4e8]'
-                                            : 'bg-[#d49aa8]'
-                                    }`}
-                                />
-                            ))}
-                        </div>
-
+                    <div className="flex items-center gap-3">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.visit('/dashboard')}
+                            className="h-8 px-3 text-xs font-semibold rounded-lg border-border bg-card hover:bg-muted"
+                        >
+                            ← Master Ledger
+                        </Button>
                         <ThemeToggle />
                     </div>
                 </div>
 
-                <PhoneMockupCard variant={phoneVariant} showDynamicIsland={true} className="w-full max-w-[380px] h-[750px] max-h-[calc(100vh-45px)] shadow-xl">
-                    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden relative select-none">
+                {/* 2-Column Responsive Workspace */}
+                <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    {/* Left Column (5 cols): Phone Simulator (Beneficiary View) */}
+                    <div className="lg:col-span-5 flex flex-col items-center">
+                        <div className="w-full max-w-[380px] mb-2 flex items-center justify-between px-2 text-[11px] text-muted-foreground">
+                            <span className="font-medium text-foreground">Screen A — Beneficiary View</span>
+                            <div className="flex items-center gap-1 p-0.5 bg-muted rounded-full border border-border">
+                                {(['titanium', 'purple', 'orange', 'white', 'cherry'] as const).map((v) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => setPhoneVariant(v)}
+                                        title={`Finish: ${v}`}
+                                        className={`w-3 h-3 rounded-full transition-transform ${
+                                            phoneVariant === v ? 'ring-2 ring-primary scale-110' : 'opacity-60 hover:opacity-100'
+                                        } ${
+                                            v === 'titanium' ? 'bg-[#3b3a39]'
+                                                : v === 'purple' ? 'bg-[#4a4254]'
+                                                : v === 'orange' ? 'bg-[#d4845a]'
+                                                : v === 'white' ? 'bg-[#e4e4e8]'
+                                                : 'bg-[#d49aa8]'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        <PhoneMockupCard variant={phoneVariant} showDynamicIsland={true} className="w-full max-w-[380px] h-[750px] max-h-[calc(100vh-60px)] shadow-xl">
+                            <div className="flex flex-col h-full bg-background text-foreground overflow-hidden relative select-none">
+                                
+                                <div className="w-full h-10 pt-2.5 px-6 shrink-0 flex items-center justify-between text-[11px] font-semibold text-muted-foreground z-20 pointer-events-none select-none">
+                                    <span>9:41</span>
+                                    <div className="flex items-center gap-1.5 text-[10px]">
+                                        <span>5G</span>
+                                        <span>100%</span>
+                                    </div>
+                                </div>
+
+                                <div className="px-3.5 py-2 shrink-0 bg-card/90 backdrop-blur-sm border-b border-border flex items-center justify-between gap-2 z-10">
+                                    <div>
+                                        <div className="text-xs font-bold tracking-tight text-foreground">
+                                            Voice Audit
+                                        </div>
+                                        <div className="text-[9px] text-muted-foreground">
+                                            Direct Worker Verification
+                                        </div>
+                                    </div>
+
+                                    <div className="flex p-0.5 rounded-lg bg-muted border border-border">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleLanguageChange('en')}
+                                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
+                                                languageMode === 'en'
+                                                    ? 'bg-background text-foreground shadow-xs font-bold'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            EN
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleLanguageChange('am')}
+                                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
+                                                languageMode === 'am'
+                                                    ? 'bg-background text-foreground shadow-xs font-bold'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            አማርኛ
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleLanguageChange('om')}
+                                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
+                                                languageMode === 'om'
+                                                    ? 'bg-background text-foreground shadow-xs font-bold'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            Afaan Oromoo
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="px-3.5 py-1.5 shrink-0 bg-muted/30 border-b border-border flex flex-col gap-1">
+                                    <div className="flex items-center justify-between text-[10px]">
+                                        <span className="font-medium text-muted-foreground">
+                                            Statutory Criteria
+                                        </span>
+                                        <span className="font-mono font-semibold text-foreground">
+                                            {progressStats.met}/{progressStats.total} Verified ({progressStats.percent}%)
+                                        </span>
+                                    </div>
+
+                                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
+                                        <div
+                                            className="bg-emerald-500 h-full transition-all duration-300 ease-out"
+                                            style={{ width: `${(progressStats.met / progressStats.total) * 100}%` }}
+                                        />
+                                        <div
+                                            className="bg-amber-500 h-full transition-all duration-300 ease-out"
+                                            style={{ width: `${(progressStats.unclear / progressStats.total) * 100}%` }}
+                                        />
+                                        <div
+                                            className="bg-destructive h-full transition-all duration-300 ease-out"
+                                            style={{ width: `${(progressStats.notMet / progressStats.total) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="px-3.5 py-2 shrink-0 bg-card/60 border-b border-border flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={isLiveCallActive ? endLiveCall : startLiveCall}
+                                            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                                                isListening
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : isAgentSpeaking
+                                                      ? 'bg-primary text-primary-foreground'
+                                                      : isProcessing
+                                                        ? 'bg-muted text-muted-foreground'
+                                                        : 'bg-muted hover:bg-muted/80 text-foreground'
+                                            }`}
+                                        >
+                                            {isProcessing ? (
+                                                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                                            ) : isAgentSpeaking ? (
+                                                <Volume2 className="w-3.5 h-3.5" />
+                                            ) : isListening ? (
+                                                <Mic className="w-3.5 h-3.5" />
+                                            ) : (
+                                                <PhoneCall className="w-3.5 h-3.5" />
+                                            )}
+                                        </button>
+
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-foreground">
+                                                {isListening
+                                                    ? 'Listening for worker speech...'
+                                                    : isAgentSpeaking
+                                                      ? 'AI Auditor speaking...'
+                                                      : isProcessing
+                                                        ? 'Evaluating statutory clauses...'
+                                                        : isLiveCallActive
+                                                          ? 'Call Active'
+                                                          : 'Ready to verify'}
+                                            </div>
+                                            <div className="text-[9px] text-muted-foreground">
+                                                {languageMode === 'om'
+                                                    ? 'Addis AI Voice (Afaan Oromoo)'
+                                                    : languageMode === 'am'
+                                                      ? 'Addis AI Voice (Amharic)'
+                                                      : 'OpenAI Voice Loop (English)'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {isListening && (
+                                        <div className="flex items-center gap-0.5 h-3">
+                                            {[1, 2, 3, 4, 5].map((b) => (
+                                                <div
+                                                    key={b}
+                                                    className="w-0.5 bg-emerald-500 rounded-full transition-all duration-75"
+                                                    style={{
+                                                        height: `${Math.max(3, (audioVolumeLevel * (b % 3 + 1)) / 4)}px`,
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex-1 p-3 space-y-2.5 overflow-y-auto min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                                    
+                                    {stoppedHardCase && (
+                                        <Alert className="border-destructive/30 bg-destructive/10 text-destructive p-2.5 rounded-lg">
+                                            <AlertTitle className="text-xs font-bold">
+                                                Hard Stop Triggered — Under 15 Minor
+                                            </AlertTitle>
+                                            <AlertDescription className="text-[10px] mt-0.5">
+                                                {hardCaseDetail || 'Beneficiary is under legal minimum age of 15. The interview terminated immediately.'}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        {chatTurns.length === 0 && !isLiveCallActive && (
+                                            <div className="text-center py-6 text-muted-foreground text-xs space-y-1.5">
+                                                <p className="font-semibold text-foreground">Ready for Audit</p>
+                                                <p className="text-[11px]">Select a persona from the console or tap start.</p>
+                                            </div>
+                                        )}
+
+                                        {chatTurns.map((turn, i) => (
+                                            <div
+                                                key={i}
+                                                className={`flex flex-col ${turn.sender === 'agent' ? 'items-start' : 'items-end'}`}
+                                            >
+                                                <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase tracking-wider">
+                                                    {turn.sender === 'agent' ? 'AI Auditor (sequa)' : 'Beneficiary Worker'}
+                                                </div>
+                                                <div
+                                                    className={`p-2.5 rounded-xl max-w-[88%] text-xs leading-relaxed ${
+                                                        turn.sender === 'agent'
+                                                            ? 'bg-card text-card-foreground border border-border shadow-xs'
+                                                            : 'bg-primary text-primary-foreground shadow-xs'
+                                                    }`}
+                                                >
+                                                    <p>{turn.text}</p>
+                                                    {turn.audioUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => playAgentAudio(turn.audioUrl!, turn.text)}
+                                                            className="mt-1 text-[9px] flex items-center gap-1 opacity-80 hover:opacity-100 underline text-muted-foreground hover:text-foreground"
+                                                        >
+                                                            <Volume2 className="w-3 h-3" /> Replay Voice
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {/* Feature 2: Context-Aware "Heard: ..." Chip */}
+                                        {followUps.length > 0 && (followUps[0].ambiguous_quote || (followUps[0] as any).heard_quote) && (
+                                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-lg border border-border/70 self-start animate-fadeIn">
+                                                <span className="text-primary font-semibold">Heard:</span>
+                                                <span className="italic text-foreground">"{followUps[0].ambiguous_quote || (followUps[0] as any).heard_quote}"</span>
+                                            </div>
+                                        )}
+
+                                        {followUps.length > 0 && selectedPersona === 'abel' && (
+                                            <div className="pt-1 flex justify-center">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleSendFollowUpAnswer(PERSONA_SCRIPTS.abel.followUpAnswer)}
+                                                    className="h-8 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg flex items-center gap-1.5 shadow-xs"
+                                                >
+                                                    <span>💬</span> Clarify Abel's Hours (35 hrs/wk)
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {followUps.length > 0 && selectedPersona === 'almaz' && (
+                                            <div className="pt-1 flex justify-center">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleSendFollowUpAnswer(PERSONA_SCRIPTS.almaz.followUpAnswer)}
+                                                    className="h-8 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg flex items-center gap-1.5 shadow-xs"
+                                                >
+                                                    <span>💬</span> Clarify Almaz's Hours (Sa'aatii 40 / Torban)
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {liveInterimSpeech && (
+                                            <div className="flex flex-col items-end">
+                                                <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase">
+                                                    Speaking...
+                                                </div>
+                                                <div className="p-2.5 rounded-xl max-w-[88%] text-xs bg-primary/80 text-primary-foreground border border-primary/40">
+                                                    {liveInterimSpeech}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {isProcessing && (
+                                            <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-lg text-[11px] text-muted-foreground border border-border">
+                                                <RefreshCcw className="w-3 h-3 animate-spin text-foreground" />
+                                                <span>
+                                                    {clauseProcessingPhase === 'extracting'
+                                                        ? 'Supervising multi-agent extraction...'
+                                                        : clauseProcessingPhase === 'verifying'
+                                                          ? 'Verifier-Critic reflection fact-check...'
+                                                          : 'Assessing 7 statutory clauses...'}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div ref={chatBottomRef} />
+                                    </div>
+
+                                    {/* Feature 2: Verification Pulse Micro-Interaction on Clause Badges */}
+                                    <div className="pt-2 border-t border-border space-y-1.5">
+                                        <div
+                                            onClick={() => setShowClauseDetails(!showClauseDetails)}
+                                            className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground py-0.5"
+                                        >
+                                            <span>7 Statutory Clauses ({progressStats.met}/{progressStats.total})</span>
+                                            <span className="flex items-center gap-0.5 text-foreground">
+                                                {showClauseDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-1">
+                                            {Object.entries(CLAUSE_DEFINITIONS).map(([key, def]) => {
+                                                const verdict = verdicts[key];
+                                                const status = verdict?.status || 'pending';
+                                                const isExtracting = isProcessing && clauseProcessingPhase === 'extracting';
+                                                const isVerifying = isProcessing && clauseProcessingPhase === 'verifying';
+
+                                                const statusLabel =
+                                                    status === 'met'
+                                                        ? '100% Verified'
+                                                        : status === 'not_met'
+                                                          ? 'Not Met'
+                                                          : status === 'unclear'
+                                                            ? 'Needs Follow-Up'
+                                                            : 'Waiting on Answer';
+
+                                                return (
+                                                    <div
+                                                        key={key}
+                                                        className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between text-xs ${
+                                                            isVerifying
+                                                                ? 'border-amber-500/40 bg-amber-500/[0.04]'
+                                                                : isExtracting
+                                                                  ? 'border-sky-500/40 bg-sky-500/[0.04]'
+                                                                  : 'border-border/70 bg-card/60 hover:bg-muted/30'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-medium text-[11px] text-foreground">{def.short}</span>
+                                                            {showClauseDetails && verdict?.evidence_quote && (
+                                                                <span className="text-[9px] text-muted-foreground line-clamp-1">
+                                                                    "{verdict.evidence_quote}"
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {isVerifying ? (
+                                                                <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold py-0.5 px-2 rounded-full border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 animate-pulse">
+                                                                    <ShieldCheck className="w-2.5 h-2.5 animate-spin" /> Verifying...
+                                                                </span>
+                                                            ) : isExtracting ? (
+                                                                <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold py-0.5 px-2 rounded-full border border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10 animate-pulse">
+                                                                    <RefreshCcw className="w-2.5 h-2.5 animate-spin" /> Extracting...
+                                                                </span>
+                                                            ) : (
+                                                                <>
+                                                                    {verdict?.verifier_flag !== undefined && verdict?.verifier_flag !== null && (
+                                                                        verdict.verifier_flag === false ? (
+                                                                            <span title="Verifier-Critic Confirmed" className="text-emerald-600 dark:text-emerald-400">
+                                                                                <ShieldCheck className="w-3 h-3" />
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span title={`Flagged by Critic: ${verdict.verifier_note || 'Unfaithful signal'}`} className="text-amber-600 dark:text-amber-400">
+                                                                                <AlertTriangle className="w-3 h-3" />
+                                                                            </span>
+                                                                        )
+                                                                    )}
+                                                                    <span
+                                                                        className={`text-[9px] font-mono font-semibold py-0.5 px-1.5 rounded-full border ${
+                                                                            status === 'met'
+                                                                                ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                                                                                : status === 'not_met'
+                                                                                  ? 'border-destructive/30 text-destructive bg-destructive/10'
+                                                                                  : status === 'unclear'
+                                                                                    ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+                                                                                    : 'border-border text-muted-foreground bg-muted'
+                                                                        }`}
+                                                                    >
+                                                                        {statusLabel}
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="shrink-0 pt-2.5 pb-8 px-3.5 bg-card/98 backdrop-blur-md border-t border-border flex items-center justify-between gap-2 z-20 shadow-lg">
+                                    {isLiveCallActive ? (
+                                        <div className="flex items-center gap-2 w-full">
+                                            {isListening && (
+                                                <Button
+                                                    onClick={handleManualSend}
+                                                    className="flex-1 h-10 bg-primary text-primary-foreground font-semibold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5"
+                                                >
+                                                    <Send className="w-3.5 h-3.5" /> Tap to Send
+                                                </Button>
+                                            )}
+                                            <Button
+                                                onClick={endLiveCall}
+                                                variant="destructive"
+                                                className={`${isListening ? 'w-10 px-0' : 'flex-1'} h-10 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5`}
+                                            >
+                                                <PhoneOff className="w-4 h-4" />
+                                                {!isListening && 'End Call'}
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 w-full">
+                                            <Button
+                                                onClick={startLiveCall}
+                                                className="flex-1 h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5"
+                                            >
+                                                <PhoneCall className="w-3.5 h-3.5" /> Start Live Voice Call
+                                            </Button>
+                                            <Button
+                                                onClick={handleCompleteInterview}
+                                                disabled={stoppedHardCase}
+                                                variant="outline"
+                                                className="h-10 px-3.5 text-xs font-semibold rounded-xl border-border bg-card hover:bg-muted text-foreground"
+                                            >
+                                                Save →
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        </PhoneMockupCard>
+                    </div>
+
+                    {/* Right Column (7 cols): Live Multi-Agent Trace Console & Benchmark Triggers */}
+                    <div className="lg:col-span-7 flex flex-col gap-4">
                         
-                        <div className="w-full h-10 pt-2.5 px-6 shrink-0 flex items-center justify-between text-[11px] font-semibold text-muted-foreground z-20 pointer-events-none select-none">
-                            <span>9:41</span>
-                            <div className="flex items-center gap-1.5 text-[10px]">
-                                <span>5G</span>
-                                <span>100%</span>
-                            </div>
-                        </div>
+                        {/* Live Trace Observability Panel (Feature 1) */}
+                        <AgentTrace
+                            interviewId={currentInterviewId || undefined}
+                            initialEvents={traceEvents}
+                            isLiveStreaming={isProcessing || isListening || isLiveCallActive}
+                            className="min-h-[480px] max-h-[540px]"
+                        />
 
-                        <div className="px-3.5 py-2 shrink-0 bg-card/90 backdrop-blur-sm border-b border-border flex items-center justify-between gap-2 z-10">
-                            <div>
-                                <div className="text-xs font-bold tracking-tight text-foreground">
-                                    Voice Audit
+                        {/* Benchmark Persona Controls Card */}
+                        <div className="p-4 rounded-2xl border border-border/80 bg-card/70 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Cpu className="size-4 text-primary" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                        Multi-Agent Benchmark Persona Triggers
+                                    </span>
                                 </div>
-                                <div className="text-[9px] text-muted-foreground">
-                                    Direct Worker Verification
-                                </div>
-                            </div>
-
-                            <div className="flex p-0.5 rounded-lg bg-muted border border-border">
-                                <button
-                                    type="button"
-                                    onClick={() => handleLanguageChange('en')}
-                                    className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
-                                        languageMode === 'en'
-                                            ? 'bg-background text-foreground shadow-xs font-bold'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    EN
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleLanguageChange('am')}
-                                    className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
-                                        languageMode === 'am'
-                                            ? 'bg-background text-foreground shadow-xs font-bold'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    አማርኛ
-                                </button>
-                            </div>
-
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => router.visit('/dashboard')}
-                                className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                            >
-                                Dashboard
-                            </Button>
-                        </div>
-
-                        <div className="px-3.5 py-1.5 shrink-0 bg-muted/30 border-b border-border flex flex-col gap-1">
-                            <div className="flex items-center justify-between text-[10px]">
-                                <span className="font-medium text-muted-foreground">
-                                    Statutory Criteria
-                                </span>
-                                <span className="font-mono font-semibold text-foreground">
-                                    {progressStats.met}/{progressStats.total} Verified ({progressStats.percent}%)
+                                <span className="text-[10px] font-mono text-muted-foreground">
+                                    LangSmith Observability Spec
                                 </span>
                             </div>
 
-                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                                <div
-                                    className="bg-emerald-500 h-full transition-all duration-300 ease-out"
-                                    style={{ width: `${(progressStats.met / progressStats.total) * 100}%` }}
-                                />
-                                <div
-                                    className="bg-amber-500 h-full transition-all duration-300 ease-out"
-                                    style={{ width: `${(progressStats.unclear / progressStats.total) * 100}%` }}
-                                />
-                                <div
-                                    className="bg-destructive h-full transition-all duration-300 ease-out"
-                                    style={{ width: `${(progressStats.notMet / progressStats.total) * 100}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="px-3 py-1.5 shrink-0 bg-card/60 border-b border-border">
-                            <div className="grid grid-cols-4 gap-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                                {/* Selam */}
                                 <button
                                     type="button"
                                     onClick={() => handleTriggerPersonaDemo('selam')}
-                                    className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
+                                    className={`p-3 rounded-xl border text-left transition-all ${
                                         selectedPersona === 'selam'
-                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
-                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
+                                            ? 'bg-primary/10 border-primary/50 text-foreground ring-1 ring-primary/40'
+                                            : 'bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground'
                                     }`}
                                 >
-                                    <div className="truncate font-semibold">Selam</div>
-                                    <div className="text-[8px] opacity-70">Clean EN</div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs font-bold text-foreground">Selam Tesfaye</div>
+                                        <Badge variant="outline" className="text-[9px] h-4 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                                            Clean (EN)
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                                        All 7 clauses resolve met without follow-up. Verifier confirms source quotes.
+                                    </p>
                                 </button>
 
+                                {/* Abel */}
                                 <button
                                     type="button"
                                     onClick={() => handleTriggerPersonaDemo('abel')}
-                                    className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
+                                    className={`p-3 rounded-xl border text-left transition-all ${
                                         selectedPersona === 'abel'
-                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
-                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
+                                            ? 'bg-primary/10 border-primary/50 text-foreground ring-1 ring-primary/40'
+                                            : 'bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground'
                                     }`}
                                 >
-                                    <div className="truncate font-semibold">Abel</div>
-                                    <div className="text-[8px] opacity-70">Unclear AM</div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs font-bold text-foreground">Abel Kebede</div>
+                                        <Badge variant="outline" className="text-[9px] h-4 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                                            Unclear (AM)
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                                        Critic flags relative duration. Supervisor issues context-aware probe.
+                                    </p>
                                 </button>
 
+                                {/* Almaz */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleTriggerPersonaDemo('almaz')}
+                                    className={`p-3 rounded-xl border text-left transition-all ${
+                                        selectedPersona === 'almaz'
+                                            ? 'bg-primary/10 border-primary/50 text-foreground ring-1 ring-primary/40'
+                                            : 'bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs font-bold text-foreground">Almaz Tolessa</div>
+                                        <Badge variant="outline" className="text-[9px] h-4 text-sky-600 dark:text-sky-400 border-sky-500/30">
+                                            Oromoo (OM)
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                                        Afaan Oromoo STT/TTS. Relative duration echoes context-aware follow-up.
+                                    </p>
+                                </button>
+
+                                {/* Minor */}
                                 <button
                                     type="button"
                                     onClick={() => handleTriggerPersonaDemo('minor')}
-                                    className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
+                                    className={`p-3 rounded-xl border text-left transition-all ${
                                         selectedPersona === 'minor'
-                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
-                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
+                                            ? 'bg-destructive/10 border-destructive/50 text-foreground ring-1 ring-destructive/40'
+                                            : 'bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground'
                                     }`}
                                 >
-                                    <div className="truncate font-semibold">Minor</div>
-                                    <div className="text-[8px] opacity-70">Under-15</div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleStartCustomCall()}
-                                    className={`py-1 px-1 rounded-md text-center border text-[10px] transition-all ${
-                                        selectedPersona === 'custom'
-                                            ? 'border-border bg-muted text-foreground font-bold shadow-xs'
-                                            : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    <div className="truncate font-semibold">You</div>
-                                    <div className="text-[8px] opacity-70">Live Mic</div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs font-bold text-foreground">Yordanos Girma</div>
+                                        <Badge variant="outline" className="text-[9px] h-4 text-destructive border-destructive/30">
+                                            Minor Stop
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                                        Safety interlock halts interview immediately. Downstream clauses aborted.
+                                    </p>
                                 </button>
                             </div>
-                        </div>
-
-                        <div className="py-2 px-3 shrink-0 flex items-center justify-between bg-card/40 border-b border-border">
-                            <div className="flex items-center gap-2.5">
-                                <button
-                                    type="button"
-                                    onClick={isListening ? handleManualSend : startLiveCall}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                                        isListening
-                                            ? 'bg-emerald-600 text-white shadow-xs'
-                                            : isAgentSpeaking
-                                              ? 'bg-primary text-primary-foreground'
-                                              : isProcessing
-                                                ? 'bg-muted text-muted-foreground'
-                                                : 'bg-muted hover:bg-muted/80 text-foreground'
-                                    }`}
-                                >
-                                    {isProcessing ? (
-                                        <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
-                                    ) : isAgentSpeaking ? (
-                                        <Volume2 className="w-3.5 h-3.5" />
-                                    ) : isListening ? (
-                                        <Mic className="w-3.5 h-3.5" />
-                                    ) : (
-                                        <PhoneCall className="w-3.5 h-3.5" />
-                                    )}
-                                </button>
-
-                                <div>
-                                    <div className="text-[11px] font-semibold text-foreground">
-                                        {isListening
-                                            ? 'Listening for worker speech...'
-                                            : isAgentSpeaking
-                                              ? 'AI Auditor speaking...'
-                                              : isProcessing
-                                                ? 'Evaluating statutory clauses...'
-                                                : isLiveCallActive
-                                                  ? 'Call Active'
-                                                  : 'Ready to verify'}
-                                    </div>
-                                    <div className="text-[9px] text-muted-foreground">
-                                        {languageMode === 'am' ? 'Addis AI Voice (Amharic)' : 'OpenAI Voice Loop (English)'}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {isListening && (
-                                <div className="flex items-center gap-0.5 h-3">
-                                    {[1, 2, 3, 4, 5].map((b) => (
-                                        <div
-                                            key={b}
-                                            className="w-0.5 bg-emerald-500 rounded-full transition-all duration-75"
-                                            style={{
-                                                height: `${Math.max(3, (audioVolumeLevel * (b % 3 + 1)) / 4)}px`,
-                                            }}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex-1 p-3 space-y-2.5 overflow-y-auto min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                            
-                            {stoppedHardCase && (
-                                <Alert className="border-destructive/30 bg-destructive/10 text-destructive p-2.5 rounded-lg">
-                                    <AlertTitle className="text-xs font-bold">
-                                        Hard Stop Triggered — Under 15 Minor
-                                    </AlertTitle>
-                                    <AlertDescription className="text-[10px] mt-0.5">
-                                        {hardCaseDetail || 'Beneficiary is under legal minimum age of 15. The interview terminated immediately.'}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-
-                            <div className="space-y-2">
-                                {chatTurns.length === 0 && !isLiveCallActive && (
-                                    <div className="text-center py-6 text-muted-foreground text-xs space-y-1.5">
-                                        <p className="font-semibold text-foreground">Ready for Audit</p>
-                                        <p className="text-[11px]">Select a persona above or tap start to begin.</p>
-                                    </div>
-                                )}
-
-                                {chatTurns.map((turn, i) => (
-                                    <div
-                                        key={i}
-                                        className={`flex flex-col ${turn.sender === 'agent' ? 'items-start' : 'items-end'}`}
-                                    >
-                                        <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase tracking-wider">
-                                            {turn.sender === 'agent' ? 'AI Auditor (sequa)' : 'Beneficiary Worker'}
-                                        </div>
-                                        <div
-                                            className={`p-2.5 rounded-xl max-w-[88%] text-xs leading-relaxed ${
-                                                turn.sender === 'agent'
-                                                    ? 'bg-card text-card-foreground border border-border shadow-xs'
-                                                    : 'bg-primary text-primary-foreground shadow-xs'
-                                            }`}
-                                        >
-                                            <p>{turn.text}</p>
-                                            {turn.audioUrl && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => playAgentAudio(turn.audioUrl!, turn.text)}
-                                                    className="mt-1 text-[9px] flex items-center gap-1 opacity-80 hover:opacity-100 underline text-muted-foreground hover:text-foreground"
-                                                >
-                                                    <Volume2 className="w-3 h-3" /> Replay Voice
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {followUps.length > 0 && selectedPersona === 'abel' && (
-                                    <div className="pt-1 flex justify-center">
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleSendFollowUpAnswer(PERSONA_SCRIPTS.abel.followUpAnswer)}
-                                            className="h-8 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg flex items-center gap-1.5 shadow-xs"
-                                        >
-                                            <span>💬</span> Clarify Abel's Hours (35 hrs/wk)
-                                        </Button>
-                                    </div>
-                                )}
-
-                                {liveInterimSpeech && (
-                                    <div className="flex flex-col items-end">
-                                        <div className="text-[8px] text-muted-foreground mb-0.5 px-1 font-semibold uppercase">
-                                            Speaking...
-                                        </div>
-                                        <div className="p-2.5 rounded-xl max-w-[88%] text-xs bg-primary/80 text-primary-foreground border border-primary/40">
-                                            {liveInterimSpeech}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {isProcessing && (
-                                    <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-lg text-[11px] text-muted-foreground border border-border">
-                                        <RefreshCcw className="w-3 h-3 animate-spin text-foreground" />
-                                        <span>
-                                            {languageMode === 'am'
-                                                ? 'ማረጋገጫዎች እየተገመገሙ ነው...'
-                                                : 'Assessing statutory clauses...'}
-                                        </span>
-                                    </div>
-                                )}
-
-                                <div ref={chatBottomRef} />
-                            </div>
-
-                            <div className="pt-2 border-t border-border space-y-1.5">
-                                <div
-                                    onClick={() => setShowClauseDetails(!showClauseDetails)}
-                                    className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground py-0.5"
-                                >
-                                    <span>7 Statutory Clauses ({progressStats.met}/{progressStats.total})</span>
-                                    <span className="flex items-center gap-0.5 text-foreground">
-                                        {showClauseDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                    </span>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-1">
-                                    {Object.entries(CLAUSE_DEFINITIONS).map(([key, def]) => {
-                                        const verdict = verdicts[key];
-                                        const status = verdict?.status || 'pending';
-
-                                        return (
-                                            <div
-                                                key={key}
-                                                className="p-1.5 rounded-lg border border-border/70 bg-card/60 flex items-center justify-between text-xs transition-colors hover:bg-muted/30"
-                                            >
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="font-medium text-[11px] text-foreground">{def.short}</span>
-                                                    {showClauseDetails && verdict?.evidence_quote && (
-                                                        <span className="text-[9px] text-muted-foreground line-clamp-1">
-                                                            "{verdict.evidence_quote}"
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    {verdict?.verifier_flag !== undefined && verdict?.verifier_flag !== null && (
-                                                        verdict.verifier_flag === false ? (
-                                                            <span title="Verifier-Critic Confirmed" className="text-emerald-600 dark:text-emerald-400">
-                                                                <ShieldCheck className="w-3 h-3" />
-                                                            </span>
-                                                        ) : (
-                                                            <span title={`Flagged by Critic: ${verdict.verifier_note || 'Unfaithful signal'}`} className="text-amber-500">
-                                                                <AlertTriangle className="w-3 h-3" />
-                                                            </span>
-                                                        )
-                                                    )}
-                                                    <span
-                                                        className={`text-[9px] font-mono uppercase font-semibold py-0.5 px-1.5 rounded-full border ${
-                                                            status === 'met'
-                                                                ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-                                                                : status === 'not_met'
-                                                                  ? 'border-destructive/30 text-destructive bg-destructive/10'
-                                                                  : status === 'unclear'
-                                                                    ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10'
-                                                                    : 'border-border text-muted-foreground bg-muted'
-                                                        }`}
-                                                    >
-                                                        {status}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="shrink-0 pt-2.5 pb-8 px-3.5 bg-card/98 backdrop-blur-md border-t border-border flex items-center justify-between gap-2 z-20 shadow-lg">
-                            {isLiveCallActive ? (
-                                <div className="flex items-center gap-2 w-full">
-                                    {isListening && (
-                                        <Button
-                                            onClick={handleManualSend}
-                                            className="flex-1 h-10 bg-primary text-primary-foreground font-semibold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5"
-                                        >
-                                            <Send className="w-3.5 h-3.5" /> Tap to Send
-                                        </Button>
-                                    )}
-                                    <Button
-                                        onClick={endLiveCall}
-                                        variant="destructive"
-                                        className={`${isListening ? 'w-10 px-0' : 'flex-1'} h-10 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5`}
-                                    >
-                                        <PhoneOff className="w-4 h-4" />
-                                        {!isListening && 'End Call'}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 w-full">
-                                    <Button
-                                        onClick={startLiveCall}
-                                        className="flex-1 h-10 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5"
-                                    >
-                                        <PhoneCall className="w-3.5 h-3.5" /> Start Live Voice Call
-                                    </Button>
-                                    <Button
-                                        onClick={handleCompleteInterview}
-                                        disabled={stoppedHardCase}
-                                        variant="outline"
-                                        className="h-10 px-3.5 text-xs font-semibold rounded-xl border-border bg-card hover:bg-muted text-foreground"
-                                    >
-                                        Save →
-                                    </Button>
-                                </div>
-                            )}
                         </div>
 
                     </div>
-                </PhoneMockupCard>
-
-                {/* Subtitle */}
-                <div className="w-full max-w-[380px] mt-2 text-center text-[10px] text-muted-foreground">
-                    Addis AI Voice (Amharic) • OpenAI (English) • Rule Engine Persistence
                 </div>
             </div>
         </>

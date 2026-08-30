@@ -479,14 +479,14 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
         <>
             <Head title="Feature Phone IVR Voice Simulator — Addis AI Amharic TTS & STT" />
 
-            <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex flex-col items-center justify-center p-2 sm:p-4 transition-colors duration-200">
+            <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-2 sm:p-4 transition-colors duration-200">
                 {/* Top Banner Navigation */}
                 <div className="w-full max-w-sm mb-2 flex items-center justify-between">
                     <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => router.visit('/interview')}
-                        className="h-8 text-xs text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                        className="h-8 text-xs text-muted-foreground hover:text-foreground"
                     >
                         <ChevronLeft className="w-4 h-4 mr-1" /> Smartphone View
                     </Button>
@@ -496,9 +496,9 @@ export default function FeaturePhoneSimulator({ interview: initialInterview }: F
                             size="sm"
                             variant="outline"
                             onClick={() => setScriptMode((m) => (m === 'fidel' ? 'latin' : 'fidel'))}
-                            className="h-8 text-xs font-mono border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+                            className="h-8 text-xs font-mono border-border bg-card hover:bg-muted text-foreground"
                         >
-                            <Globe className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                            <Globe className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400" />
                             {scriptMode === 'fidel' ? 'ፊደል (Ge\'ez)' : 'Latin Script'}
                         </Button>
                         <ThemeToggle />
