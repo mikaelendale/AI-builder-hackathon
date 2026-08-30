@@ -264,14 +264,35 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         setIsAgentSpeaking(true);
         if (activeAudioElementRef.current) {
             activeAudioElementRef.current.pause();
+            activeAudioElementRef.current = null;
         }
+
         if (audioUrl) {
+            console.log('[sequa-voice] Playing audio clip from URL:', audioUrl);
             const audio = new Audio(audioUrl);
+            audio.preload = 'auto';
             activeAudioElementRef.current = audio;
-            audio.onended = () => { setIsAgentSpeaking(false); onEnd?.(); };
-            audio.onerror = () => { fallbackSpeechSynthesis(fallbackText, onEnd); };
-            audio.play().catch(() => { fallbackSpeechSynthesis(fallbackText, onEnd); });
+
+            audio.onended = () => {
+                setIsAgentSpeaking(false);
+                activeAudioElementRef.current = null;
+                onEnd?.();
+            };
+
+            audio.onerror = (e) => {
+                console.warn('[sequa-voice] HTML5 Audio error, trying Web Speech fallback:', e);
+                fallbackSpeechSynthesis(fallbackText, onEnd);
+            };
+
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch((err) => {
+                    console.warn('[sequa-voice] Audio autoplay prevented or failed:', err);
+                    fallbackSpeechSynthesis(fallbackText, onEnd);
+                });
+            }
         } else {
+            console.log('[sequa-voice] No audio URL provided, using Web Speech synthesis.');
             fallbackSpeechSynthesis(fallbackText, onEnd);
         }
     };
@@ -524,7 +545,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
         setChatTurns((prev) => [...prev, { sender: 'agent', text: greeting, timestamp: 'Now' }]);
 
-        const voiceId = languageModeRef.current === 'om' ? 'om-default' : 'am-hamen';
+        const voiceId = languageModeRef.current === 'om' ? 'om-bikila' : 'am-hamen';
 
         try {
             const res = await fetch('/api/audio/speak', {

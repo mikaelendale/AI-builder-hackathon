@@ -61,14 +61,20 @@ class AddisAiVoice
             return '';
         }
 
+        $defaultVoice = $languageCode === 'om' ? 'om-bikila' : 'am-hamen';
+        $selectedVoice = $voiceId ?: config('services.addis.default_voice_id', env('ADDIS_DEFAULT_VOICE_ID', $defaultVoice));
+        if ($selectedVoice === 'om-default') {
+            $selectedVoice = 'om-bikila';
+        }
+
         try {
-            $response = Http::timeout(4)
+            $response = Http::timeout(10)
                 ->withHeaders([
                     'x-api-key' => $this->apiKey,
                     'content-type' => 'application/json',
                 ])->post("{$this->baseUrl}/api/v1/voice/generations", [
                     'text' => $text,
-                    'voice_id' => $voiceId ?? config('services.addis.default_voice_id', env('ADDIS_DEFAULT_VOICE_ID', 'am-hamen')),
+                    'voice_id' => $selectedVoice,
                     'language' => $languageCode,
                     'output_format' => 'mp3_44100',
                     'client_request_id' => (string) Str::uuid(),
@@ -76,13 +82,14 @@ class AddisAiVoice
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['data']['audio_url'] 
+                return $data['data']['playback']['url']
+                    ?? $data['data']['audio_url'] 
                     ?? $data['audio_url'] 
                     ?? $data['data']['url'] 
                     ?? '';
             }
         } catch (\Throwable $e) {
-            // Log or fallback
+            \Illuminate\Support\Facades\Log::warning('[AddisAiVoice] Speak generation failed: ' . $e->getMessage());
         }
 
         return '';

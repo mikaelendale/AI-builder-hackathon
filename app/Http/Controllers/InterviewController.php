@@ -655,19 +655,21 @@ class InterviewController extends Controller
         if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
             try {
                 $addis = app(\App\Services\AddisAiVoice::class);
-                $voiceId = $lang === 'om' ? 'om-default' : 'am-hamen';
+                $voiceId = $lang === 'om' ? 'om-bikila' : 'am-hamen';
                 $url = $addis->speak($text, $lang === 'om' ? 'om' : 'am', $voiceId);
                 if (!empty($url)) {
                     return $url;
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[InterviewController] Addis AI speech failed: ' . $e->getMessage());
+            }
         }
 
         // For English, use OpenAI TTS
         $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
         if ($lang === 'en' && $openAiKey) {
             try {
-                $res = \Illuminate\Support\Facades\Http::withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
+                $res = \Illuminate\Support\Facades\Http::timeout(10)->withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
                     'model' => 'tts-1',
                     'input' => $text,
                     'voice' => 'alloy',
@@ -677,7 +679,9 @@ class InterviewController extends Controller
                     $base64 = base64_encode($res->body());
                     return "data:audio/mp3;base64,{$base64}";
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[InterviewController] OpenAI TTS failed: ' . $e->getMessage());
+            }
         }
 
         return null;
