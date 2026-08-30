@@ -20,6 +20,7 @@ class Interview extends Model
         'consent_given',
         'started_at',
         'completed_at',
+        'meta',
     ];
 
     protected function casts(): array
@@ -29,6 +30,7 @@ class Interview extends Model
             'consent_given' => 'boolean',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'meta' => 'array',
         ];
     }
 

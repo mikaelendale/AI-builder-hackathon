@@ -19,6 +19,7 @@ import {
     Play,
     Radio,
     RefreshCcw,
+    Save,
     Send,
     Shield,
     ShieldAlert,
@@ -179,6 +180,8 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     const [audioVolumeLevel, setAudioVolumeLevel] = useState(0);
     const [showClauseDetails, setShowClauseDetails] = useState(false);
     const [phoneVariant, setPhoneVariant] = useState<'titanium' | 'purple' | 'orange' | 'white' | 'cherry'>('titanium');
+    const [lastSavedRowId, setLastSavedRowId] = useState<number | null>(null);
+    const [isSavingToLedger, setIsSavingToLedger] = useState(false);
 
     const [verdicts, setVerdicts] = useState<Record<string, ClauseVerdict>>(() => {
         const initial: Record<string, ClauseVerdict> = {};
@@ -278,7 +281,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.rate = 1.0;
-            u.lang = languageModeRef.current === 'am' ? 'am-ET' : 'en-US';
+            u.lang = languageModeRef.current === 'am' ? 'am-ET' : languageModeRef.current === 'om' ? 'om-ET' : 'en-US';
             u.onend = () => { setIsAgentSpeaking(false); onEnd?.(); };
             u.onerror = () => { setIsAgentSpeaking(false); onEnd?.(); };
             window.speechSynthesis.speak(u);
@@ -462,6 +465,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             if (data.trace_events) {
                 setTraceEvents(data.trace_events);
             }
+            if (data.sheet_row?.id) {
+                setLastSavedRowId(data.sheet_row.id);
+            }
             if (data.stopped) {
                 setStoppedHardCase(true);
                 setHardCaseDetail(data.agent_text);
@@ -510,17 +516,21 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         setStoppedHardCase(false);
         setHardCaseDetail(null);
 
-        const greeting = languageModeRef.current === 'am'
-            ? 'ጤና ይስጥልኝ። የሴኳ ፕሮግራም የሥራ ማረጋገጫ ረዳት ነኝ። እባክዎን ስምዎን፣ ዕድሜዎን እና የሥራ ሁኔታዎን ይንገሩኝ።'
-            : 'Hello. I am the sequa programme verification assistant. Please state your name, age, and employment details.';
+        const greeting = languageModeRef.current === 'om'
+            ? 'Akkam jirtu. Ani gargaaraa mirkaneessa hojii sequa ti. Mee maqaa, umrii fi haala hojii keessan natti himaa.'
+            : languageModeRef.current === 'am'
+                ? 'ጤና ይስጥልኝ። የሴኳ ፕሮግራም የሥራ ማረጋገጫ ረዳት ነኝ። እባክዎን ስምዎን፣ ዕድሜዎን እና የሥራ ሁኔታዎን ይንገሩኝ።'
+                : 'Hello. I am the sequa programme verification assistant. Please state your name, age, and employment details.';
 
         setChatTurns((prev) => [...prev, { sender: 'agent', text: greeting, timestamp: 'Now' }]);
+
+        const voiceId = languageModeRef.current === 'om' ? 'om-default' : 'am-hamen';
 
         try {
             const res = await fetch('/api/audio/speak', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
-                body: JSON.stringify({ text: greeting, language: languageModeRef.current, voice_id: 'am-hamen' }),
+                body: JSON.stringify({ text: greeting, language: languageModeRef.current, voice_id: voiceId }),
             });
             const data = await res.json();
             playAgentAudio(data.audio_url, greeting, () => {
@@ -582,6 +592,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             if (data.verdicts) setVerdicts(data.verdicts);
             if (data.follow_ups) setFollowUps(data.follow_ups);
             if (data.trace_events) setTraceEvents(data.trace_events);
+            if (data.sheet_row?.id) setLastSavedRowId(data.sheet_row.id);
             if (data.stopped) { setStoppedHardCase(true); setHardCaseDetail(data.agent_text); }
 
             setChatTurns((prev) => [
@@ -620,6 +631,7 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
             if (data.verdicts) setVerdicts(data.verdicts);
             if (data.follow_ups) setFollowUps(data.follow_ups);
             if (data.trace_events) setTraceEvents(data.trace_events);
+            if (data.sheet_row?.id) setLastSavedRowId(data.sheet_row.id);
 
             setChatTurns((prev) => [
                 ...prev,
@@ -653,19 +665,36 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     };
 
     const handleCompleteInterview = async () => {
-        if (!currentInterviewIdRef.current) return;
+        if (!currentInterviewIdRef.current) {
+            router.visit('/dashboard');
+            return;
+        }
+        setIsSavingToLedger(true);
         try {
-            await fetch(`/interviews/${currentInterviewIdRef.current}/complete`, {
+            const role = selectedPersona === 'selam' ? 'Call Centre Agent'
+                : selectedPersona === 'abel' ? 'Construction Daily Labourer'
+                : selectedPersona === 'almaz' ? 'Textile Machine Operator'
+                : selectedPersona === 'minor' ? 'Packaging Assistant (Minor)'
+                : 'Live Verified Worker';
+
+            const res = await fetch(`/interviews/${currentInterviewIdRef.current}/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
                 body: JSON.stringify({
-                    job_position: selectedPersona === 'selam' ? 'Call Centre Agent'
-                        : selectedPersona === 'abel' ? 'Construction Daily Labourer'
-                        : 'General Beneficiary',
+                    job_position: role,
                 }),
             });
+            const data = await res.json();
+            if (data.sheet_row) {
+                setLastSavedRowId(data.sheet_row.id);
+            }
             router.visit('/dashboard');
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+            router.visit('/dashboard');
+        } finally {
+            setIsSavingToLedger(false);
+        }
     };
 
     return (
@@ -686,14 +715,21 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
+                        {lastSavedRowId && (
+                            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold animate-fadeIn">
+                                <CheckCircle2 className="size-3 text-emerald-500" />
+                                Ledger Row #{lastSavedRowId} Synced
+                            </span>
+                        )}
                         <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => router.visit('/dashboard')}
-                            className="h-8 px-3 text-xs font-semibold rounded-lg border-border bg-card hover:bg-muted"
+                            onClick={handleCompleteInterview}
+                            disabled={isSavingToLedger}
+                            className="h-8 px-3 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm flex items-center gap-1.5"
                         >
-                            ← Master Ledger
+                            {isSavingToLedger ? <RefreshCcw className="size-3 animate-spin" /> : <Save className="size-3" />}
+                            <span>Save & View on Master Ledger →</span>
                         </Button>
                         <ThemeToggle />
                     </div>
@@ -968,15 +1004,52 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
                                         )}
 
                                         {isProcessing && (
-                                            <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-lg text-[11px] text-muted-foreground border border-border">
-                                                <RefreshCcw className="w-3 h-3 animate-spin text-foreground" />
-                                                <span>
-                                                    {clauseProcessingPhase === 'extracting'
-                                                        ? 'Supervising multi-agent extraction...'
-                                                        : clauseProcessingPhase === 'verifying'
-                                                          ? 'Verifier-Critic reflection fact-check...'
-                                                          : 'Assessing 7 statutory clauses...'}
-                                                </span>
+                                            <div className="flex flex-col items-start gap-1 animate-fadeIn">
+                                                <div className="text-[8px] text-muted-foreground px-1 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                                                    <span className="relative flex size-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full size-2 bg-primary"></span>
+                                                    </span>
+                                                    <span className="font-bold text-foreground">
+                                                        {languageMode === 'am'
+                                                            ? 'AI ረዳት እያሰበ ነው...'
+                                                            : languageMode === 'om'
+                                                              ? 'AI Yaadaa jira...'
+                                                              : 'AI Auditor Thinking...'}
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 rounded-xl max-w-[92%] bg-card text-card-foreground border border-primary/30 shadow-xs flex flex-col gap-2">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="flex space-x-1">
+                                                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-foreground">
+                                                            {languageMode === 'am'
+                                                                ? 'የሥራ ሁኔታዎችን በመመርመር ላይ...'
+                                                                : languageMode === 'om'
+                                                                  ? 'Ulaagaalee seeraa qorachaa jira...'
+                                                                  : 'Reasoning and evaluating statutory clauses...'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground border-t border-border pt-1.5">
+                                                        <Badge variant="outline" className="text-[9px] h-4 font-mono px-1.5 bg-muted/60 border-primary/40 text-primary font-bold">
+                                                            {clauseProcessingPhase === 'extracting'
+                                                                ? 'Phase 1: Supervisor Fan-Out'
+                                                                : clauseProcessingPhase === 'verifying'
+                                                                  ? 'Phase 2: Verifier-Critic Fact-Check'
+                                                                  : 'Phase 3: Statutory Rule Engine'}
+                                                        </Badge>
+                                                        <span className="truncate text-[10px] text-muted-foreground">
+                                                            {clauseProcessingPhase === 'extracting'
+                                                                ? (languageMode === 'am' ? 'ማስረጃዎችን በማውጣት ላይ' : languageMode === 'om' ? 'Ragaa baasaa jira' : 'Extracting facts & rights')
+                                                                : clauseProcessingPhase === 'verifying'
+                                                                  ? (languageMode === 'am' ? 'እውነተኝነትን በማጣራት ላይ' : languageMode === 'om' ? 'Dhugummaa mirkaneessaa' : 'Temperature=0 reflection')
+                                                                  : (languageMode === 'am' ? 'ህጋዊ ውሳኔዎችን በመወሰን ላይ' : languageMode === 'om' ? 'Murtii seeraa qopheessaa' : 'Computing final verdicts')}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
 

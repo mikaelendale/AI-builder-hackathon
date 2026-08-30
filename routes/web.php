@@ -7,7 +7,10 @@ use App\Http\Controllers\InterviewController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', [DashboardController::class, 'index'])->name('home');
+Route::get('/', function () {
+    return Inertia::render('welcome');
+})->name('home');
+
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 Route::post('/dashboard/query', [DashboardController::class, 'query'])->name('dashboard.query');
 Route::get('/dashboard/evidence-pack', [DashboardController::class, 'exportEvidencePack'])->name('dashboard.evidence-pack');

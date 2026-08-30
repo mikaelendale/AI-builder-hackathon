@@ -21,7 +21,8 @@ class DashboardController extends Controller
             'interview.continuityCheckpoints',
             'interview.traceEvents',
         ])
-        ->latest()
+        ->orderBy('updated_at', 'desc')
+        ->orderBy('id', 'desc')
         ->get();
 
         $totalInterviews = Interview::count();
@@ -105,7 +106,7 @@ class DashboardController extends Controller
             });
         }
 
-        $filteredRows = $query->latest()->get();
+        $filteredRows = $query->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get();
         $count = $filteredRows->count();
 
         $summary = $filters['human_readable_summary'] ?? "Showing {$count} matching records for query \"{$rawQuery}\"";
