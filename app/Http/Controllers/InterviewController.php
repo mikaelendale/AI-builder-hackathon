@@ -89,9 +89,31 @@ class InterviewController extends Controller
             }
         }
 
+        $defaultJob = match ($beneficiary->persona_type) {
+            'selam' => 'Call Centre Agent',
+            'abel' => 'Construction Daily Labourer',
+            'almaz' => 'Textile Machine Operator',
+            'synthetic', 'minor' => 'Packaging Assistant (Minor)',
+            default => 'General Operator',
+        };
+        $defaultGender = match ($beneficiary->persona_type) {
+            'selam', 'almaz' => 'Female',
+            'abel' => 'Male',
+            default => 'Unspecified',
+        };
+
+        $sheetRow = $this->aggregator->aggregate($interview, [
+            'job_position' => $defaultJob,
+            'gender' => $defaultGender,
+            'age_band' => $beneficiary->persona_type === 'minor' ? 'Under 15' : '15-24',
+            'monthly_salary_etb' => 6500,
+            'employer_reported_value' => 1,
+        ]);
+
         return response()->json([
             'interview_id' => $interview->id,
             'interview' => $interview->load('beneficiary'),
+            'sheet_row' => $sheetRow,
         ]);
     }
 
@@ -100,7 +122,7 @@ class InterviewController extends Controller
      */
     public function quickCreateBeneficiary(Request $request): JsonResponse
     {
-        $name = $request->input('name', 'Live Beneficiary');
+        $name = $request->input('name', 'Live Worker ' . date('H:i'));
         $lang = $request->input('language', 'en');
         $phoneType = $request->input('phone_type', 'smartphone');
 
@@ -118,10 +140,19 @@ class InterviewController extends Controller
             'started_at' => now(),
         ]);
 
+        $sheetRow = $this->aggregator->aggregate($interview, [
+            'job_position' => 'Live Verified Operator',
+            'gender' => 'Unspecified',
+            'age_band' => '15-24',
+            'monthly_salary_etb' => 6500,
+            'employer_reported_value' => 1,
+        ]);
+
         return response()->json([
             'interview_id' => $interview->id,
             'beneficiary_id' => $beneficiary->id,
             'interview' => $interview->load('beneficiary'),
+            'sheet_row' => $sheetRow,
         ]);
     }
 
@@ -651,14 +682,29 @@ class InterviewController extends Controller
 
     private function synthesizeSpeech(string $text, string $lang): ?string
     {
+        $voiceId = $lang === 'om' ? 'om-bikila' : ($lang === 'am' ? 'am-hamen' : 'alloy');
+        $cacheKey = 'tts_v5_' . md5("{$lang}_{$voiceId}_{$text}");
+
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if (!empty($cached)) {
+            return $cached;
+        }
+
+        $result = null;
+
         // For Amharic & Afaan Oromo, use Addis AI Addis Voices 2
         if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
             try {
                 $addis = app(\App\Services\AddisAiVoice::class);
-                $voiceId = $lang === 'om' ? 'om-bikila' : 'am-hamen';
-                $url = $addis->speak($text, $lang === 'om' ? 'om' : 'am', $voiceId);
+                $url = $addis->speak($text, $lang, $voiceId);
                 if (!empty($url)) {
-                    return $url;
+                    $audioRes = \Illuminate\Support\Facades\Http::timeout(8)->get($url);
+                    if ($audioRes->successful() && strlen($audioRes->body()) > 500) {
+                        $base64 = base64_encode($audioRes->body());
+                        $result = "data:audio/mp3;base64,{$base64}";
+                    } else {
+                        $result = $url;
+                    }
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('[InterviewController] Addis AI speech failed: ' . $e->getMessage());
@@ -667,7 +713,7 @@ class InterviewController extends Controller
 
         // For English, use OpenAI TTS
         $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
-        if ($lang === 'en' && $openAiKey) {
+        if ($lang === 'en' && $openAiKey && empty($result)) {
             try {
                 $res = \Illuminate\Support\Facades\Http::timeout(10)->withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
                     'model' => 'tts-1',
@@ -677,14 +723,18 @@ class InterviewController extends Controller
                 ]);
                 if ($res->successful()) {
                     $base64 = base64_encode($res->body());
-                    return "data:audio/mp3;base64,{$base64}";
+                    $result = "data:audio/mp3;base64,{$base64}";
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('[InterviewController] OpenAI TTS failed: ' . $e->getMessage());
             }
         }
 
-        return null;
+        if (!empty($result)) {
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $result, 86400 * 30);
+        }
+
+        return $result;
     }
 
     public function complete(Request $request, Interview $interview): JsonResponse

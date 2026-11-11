@@ -34,8 +34,11 @@ class DashboardController extends Controller
         // 23 partner enterprises in the six-month programme cohort
         $companiesCount = max(23, $rows->pluck('job_position')->unique()->count());
 
+        $highlightId = request()->query('highlight_id');
+
         return Inertia::render('dashboard', [
             'rows' => $rows,
+            'highlightId' => $highlightId ? (int) $highlightId : null,
             'summary' => [
                 'companies' => $companiesCount,
                 'interviewed' => $totalInterviews,

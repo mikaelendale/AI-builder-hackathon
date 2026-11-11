@@ -61,35 +61,52 @@ class AddisAiVoice
             return '';
         }
 
+        // Sanitize punctuation for Addis AI (avoid ASCII !, em-dash, and quotes that fail phonetic tokenization)
+        if ($languageCode === 'am') {
+            $text = str_replace(['!', '?', '—', '"', '“', '”'], ['።', '፧', ' ', '', '', ''], $text);
+        } elseif ($languageCode === 'om') {
+            $text = str_replace(['!', '—', '"', '“', '”'], ['.', ' ', '', '', ''], $text);
+        }
+
         $defaultVoice = $languageCode === 'om' ? 'om-bikila' : 'am-hamen';
         $selectedVoice = $voiceId ?: config('services.addis.default_voice_id', env('ADDIS_DEFAULT_VOICE_ID', $defaultVoice));
         if ($selectedVoice === 'om-default') {
             $selectedVoice = 'om-bikila';
         }
 
-        try {
-            $response = Http::timeout(10)
-                ->withHeaders([
-                    'x-api-key' => $this->apiKey,
-                    'content-type' => 'application/json',
-                ])->post("{$this->baseUrl}/api/v1/voice/generations", [
-                    'text' => $text,
-                    'voice_id' => $selectedVoice,
-                    'language' => $languageCode,
-                    'output_format' => 'mp3_44100',
-                    'client_request_id' => (string) Str::uuid(),
-                ]);
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            try {
+                $response = Http::timeout(12)
+                    ->withHeaders([
+                        'x-api-key' => $this->apiKey,
+                        'content-type' => 'application/json',
+                    ])->post("{$this->baseUrl}/api/v1/voice/generations", [
+                        'text' => $text,
+                        'voice_id' => $selectedVoice,
+                        'language' => $languageCode,
+                        'output_format' => 'mp3_44100',
+                        'client_request_id' => (string) Str::uuid(),
+                    ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['data']['playback']['url']
-                    ?? $data['data']['audio_url'] 
-                    ?? $data['audio_url'] 
-                    ?? $data['data']['url'] 
-                    ?? '';
+                if ($response->successful()) {
+                    $data = $response->json();
+                    return $data['data']['playback']['url']
+                        ?? $data['data']['audio_url'] 
+                        ?? $data['audio_url'] 
+                        ?? $data['data']['url'] 
+                        ?? '';
+                }
+
+                if ($response->status() === 429 && $attempt < 3) {
+                    sleep(2);
+                    continue;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("[AddisAiVoice] Speak attempt {$attempt} failed: " . $e->getMessage());
+                if ($attempt < 3) {
+                    sleep(1);
+                }
             }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('[AddisAiVoice] Speak generation failed: ' . $e->getMessage());
         }
 
         return '';

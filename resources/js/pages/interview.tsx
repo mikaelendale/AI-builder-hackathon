@@ -298,11 +298,19 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     };
 
     const fallbackSpeechSynthesis = (text: string, onEnd?: () => void) => {
+        // Never attempt browser Web Speech fallback for Afaan Oromoo because Windows/browsers don't support om-ET and play English voice!
+        if (languageModeRef.current === 'om') {
+            console.log('[sequa-voice] Skipping browser Web Speech fallback for Afaan Oromoo to prevent English accent.');
+            setIsAgentSpeaking(false);
+            onEnd?.();
+            return;
+        }
+
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.rate = 1.0;
-            u.lang = languageModeRef.current === 'am' ? 'am-ET' : languageModeRef.current === 'om' ? 'om-ET' : 'en-US';
+            u.lang = languageModeRef.current === 'am' ? 'am-ET' : 'en-US';
             u.onend = () => { setIsAgentSpeaking(false); onEnd?.(); };
             u.onerror = () => { setIsAgentSpeaking(false); onEnd?.(); };
             window.speechSynthesis.speak(u);
@@ -314,8 +322,14 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
 
     const initializeInterview = async (personaKey: 'selam' | 'abel' | 'almaz' | 'minor'): Promise<number> => {
         const p = PERSONA_SCRIPTS[personaKey];
-        let target = beneficiaries.find((b) => b.persona_type === p.type);
-        if (!target && beneficiaries.length > 0) target = beneficiaries[0];
+        // Target exact persona match
+        let target = personaKey === 'minor'
+            ? beneficiaries.find((b) => b.name?.includes('Yordanos') || b.persona_type === 'synthetic' && b.name?.toLowerCase().includes('yordanos'))
+            : beneficiaries.find((b) => b.persona_type === p.type);
+
+        if (!target) {
+            target = beneficiaries.find((b) => b.persona_type === p.type) || beneficiaries[0];
+        }
 
         const res = await fetch(`/beneficiaries/${target?.id || 1}/interviews`, {
             method: 'POST',
@@ -325,15 +339,19 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         const data = await res.json();
         setCurrentInterviewId(data.interview_id);
         currentInterviewIdRef.current = data.interview_id;
+        if (data.sheet_row?.id) {
+            setLastSavedRowId(data.sheet_row.id);
+        }
         return data.interview_id;
     };
 
     const initializeCustomInterview = async (): Promise<number> => {
+        const liveWorkerName = `Live Worker (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
         const res = await fetch('/beneficiaries/quick-create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
             body: JSON.stringify({
-                name: 'Live Beneficiary',
+                name: liveWorkerName,
                 language: languageModeRef.current,
                 phone_type: 'smartphone',
             }),
@@ -341,6 +359,9 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
         const data = await res.json();
         setCurrentInterviewId(data.interview_id);
         currentInterviewIdRef.current = data.interview_id;
+        if (data.sheet_row?.id) {
+            setLastSavedRowId(data.sheet_row.id);
+        }
         return data.interview_id;
     };
 
@@ -686,30 +707,31 @@ export default function InterviewPage({ beneficiaries, interview: initialIntervi
     };
 
     const handleCompleteInterview = async () => {
-        if (!currentInterviewIdRef.current) {
-            router.visit('/dashboard');
-            return;
-        }
         setIsSavingToLedger(true);
+        let rowId = lastSavedRowId;
         try {
-            const role = selectedPersona === 'selam' ? 'Call Centre Agent'
-                : selectedPersona === 'abel' ? 'Construction Daily Labourer'
-                : selectedPersona === 'almaz' ? 'Textile Machine Operator'
-                : selectedPersona === 'minor' ? 'Packaging Assistant (Minor)'
-                : 'Live Verified Worker';
+            if (currentInterviewIdRef.current) {
+                const role = selectedPersona === 'selam' ? 'Call Centre Agent'
+                    : selectedPersona === 'abel' ? 'Construction Daily Labourer'
+                    : selectedPersona === 'almaz' ? 'Textile Machine Operator'
+                    : selectedPersona === 'minor' ? 'Packaging Assistant (Minor)'
+                    : 'Live Verified Worker';
 
-            const res = await fetch(`/interviews/${currentInterviewIdRef.current}/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
-                body: JSON.stringify({
-                    job_position: role,
-                }),
-            });
-            const data = await res.json();
-            if (data.sheet_row) {
-                setLastSavedRowId(data.sheet_row.id);
+                const res = await fetch(`/interviews/${currentInterviewIdRef.current}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                    body: JSON.stringify({
+                        job_position: role,
+                    }),
+                });
+                const data = await res.json();
+                if (data.sheet_row?.id) {
+                    rowId = data.sheet_row.id;
+                    setLastSavedRowId(data.sheet_row.id);
+                }
             }
-            router.visit('/dashboard');
+            const targetUrl = rowId ? `/dashboard?highlight_id=${rowId}` : '/dashboard';
+            router.visit(targetUrl);
         } catch (err) {
             console.error(err);
             router.visit('/dashboard');

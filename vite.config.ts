@@ -29,6 +29,7 @@ export default defineConfig({
         }),
     ]),
     server: {
+        allowedHosts: ['audrie-unawful-chestily.ngrok-free.dev'],
         watch: {
             ignored: [
                 '**/.agents/**',

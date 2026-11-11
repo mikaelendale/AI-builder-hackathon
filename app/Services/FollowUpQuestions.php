@@ -26,11 +26,11 @@ class FollowUpQuestions
 
     private const TEMPLATES_OM = [
         'age_15_plus' => 'Umriikee waggaa meeqa akka taatan naaf himuu dandeessuu?',
-        'hours_threshold' => 'Torbanitti saʼaatii meeqa hojjettu? Hojii kana jalqabdee jiʼa meeqa taʼe?',
-        'min_wage' => 'Mindaan keessan meeqa? Jiʼaan moo guyyaan kaffalama?',
+        'hours_threshold' => "Torbanitti sa'aatii meeqa hojjettu? Hojii kana jalqabdee ji'a meeqa ta'e?",
+        'min_wage' => "Mindaan keessan meeqa? Ji'aan moo guyyaan kaffalama?",
         'no_child_labor' => 'Hojii kana yeroo jalqabdan umriin keessan meeqa ture?',
         'no_forced_labor' => 'Hojii kana dhiisuu yoo barbaaddan bilisaan deemuu dandeessuu?',
-        'no_discrimination' => 'Hojjettoota kaan wajjin qixxee akka ilaalamtan isinitti dhagaʼamaa?',
+        'no_discrimination' => "Hojjettoota kaan wajjin qixxee akka ilaalamtan isinitti dhaga'amaa?",
         'freedom_of_association' => 'Waldaa hojjettootaa keessatti hirmaachuuf mirga qabduu?',
     ];
 
@@ -62,7 +62,7 @@ class FollowUpQuestions
         $leadIns = [
             'en' => "You mentioned \"{$trimmedQuote}\" — ",
             'am' => "«{$trimmedQuote}» እንዳሉ ሰምቻለሁ — ",
-            'om' => "\"{$trimmedQuote}\" jettanii naaf himtan — ",
+            'om' => "{$trimmedQuote} jettanii naaf himtan. ",
         ];
 
         $lead = $leadIns[$language] ?? $leadIns['en'];

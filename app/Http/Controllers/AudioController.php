@@ -130,28 +130,46 @@ class AudioController extends Controller
 
         $text = $request->input('text');
         $lang = $request->input('language', 'am');
-        $voiceId = $request->input('voice_id');
+        $voiceId = $request->input('voice_id') ?: ($lang === 'om' ? 'om-bikila' : ($lang === 'am' ? 'am-hamen' : 'alloy'));
+        if ($voiceId === 'om-default') {
+            $voiceId = 'om-bikila';
+        }
 
-        // 1. If Amharic, use Addis AI Addis Voices 2
+        $cacheKey = 'tts_v5_' . md5("{$lang}_{$voiceId}_{$text}");
+
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if (!empty($cached)) {
+            return response()->json([
+                'audio_url' => $cached,
+                'provider' => in_array($lang, ['am', 'om']) ? 'addis-voices-2' : 'openai-tts',
+            ]);
+        }
+
+        $audioUrl = null;
+
+        // 1. If Amharic or Afaan Oromo, use Addis AI Addis Voices 2
         if (in_array($lang, ['am', 'om']) && env('ADDIS_API_KEY')) {
             try {
-                $audioUrl = $this->addisAi->speak($text, $lang, $voiceId);
-                if (!empty($audioUrl)) {
-                    return response()->json([
-                        'audio_url' => $audioUrl,
-                        'provider' => 'addis-voices-2',
-                    ]);
+                $url = $this->addisAi->speak($text, $lang, $voiceId);
+                if (!empty($url)) {
+                    $audioRes = Http::timeout(8)->get($url);
+                    if ($audioRes->successful() && strlen($audioRes->body()) > 500) {
+                        $b64 = base64_encode($audioRes->body());
+                        $audioUrl = "data:audio/mp3;base64,{$b64}";
+                    } else {
+                        $audioUrl = $url;
+                    }
                 }
             } catch (\Throwable $e) {
-                // Fall back
+                \Illuminate\Support\Facades\Log::warning('[AudioController] Addis AI speak failed: ' . $e->getMessage());
             }
         }
 
         // 2. If English and OpenAI key present, use OpenAI TTS
         $openAiKey = config('ai.providers.openai.key') ?? env('OPENAI_API_KEY');
-        if ($lang === 'en' && $openAiKey) {
+        if ($lang === 'en' && $openAiKey && empty($audioUrl)) {
             try {
-                $response = Http::withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
+                $response = Http::timeout(10)->withToken($openAiKey)->post('https://api.openai.com/v1/audio/speech', [
                     'model' => 'tts-1',
                     'input' => $text,
                     'voice' => 'alloy',
@@ -160,14 +178,19 @@ class AudioController extends Controller
 
                 if ($response->successful()) {
                     $base64 = base64_encode($response->body());
-                    return response()->json([
-                        'audio_url' => "data:audio/mp3;base64,{$base64}",
-                        'provider' => 'openai-tts',
-                    ]);
+                    $audioUrl = "data:audio/mp3;base64,{$base64}";
                 }
             } catch (\Throwable $e) {
-                // Fall back
+                \Illuminate\Support\Facades\Log::warning('[AudioController] OpenAI speak failed: ' . $e->getMessage());
             }
+        }
+
+        if (!empty($audioUrl)) {
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $audioUrl, 86400 * 30);
+            return response()->json([
+                'audio_url' => $audioUrl,
+                'provider' => in_array($lang, ['am', 'om']) ? 'addis-voices-2' : 'openai-tts',
+            ]);
         }
 
         return response()->json([

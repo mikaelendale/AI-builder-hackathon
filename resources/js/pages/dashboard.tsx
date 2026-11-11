@@ -152,6 +152,7 @@ interface SheetRow {
 
 interface DashboardProps {
     rows: SheetRow[];
+    highlightId?: number | null;
     summary: {
         companies: number;
         interviewed: number;
@@ -217,13 +218,14 @@ const CLAUSE_DEFINITIONS: Record<
     },
 };
 
-export default function Dashboard({ rows = [], summary }: DashboardProps) {
+export default function Dashboard({ rows = [], summary, highlightId }: DashboardProps) {
     const [filterMode, setFilterMode] = useState<'all' | 'discrepancies' | 'hard_cases' | 'good_jobs' | 'bilateral'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuditRow, setSelectedAuditRow] = useState<SheetRow | null>(null);
     const [activeTab, setActiveTab] = useState<'clauses' | 'bilateral' | 'continuity' | 'transcript' | 'trace'>('clauses');
     const [copiedJson, setCopiedJson] = useState(false);
     const [isExportingEvidencePack, setIsExportingEvidencePack] = useState(false);
+    const [dismissHighlight, setDismissHighlight] = useState(false);
 
     // Feature 4: Natural-Language Dashboard Search ("Ask the Ledger")
     const [aiQueryInput, setAiQueryInput] = useState('');
@@ -290,6 +292,11 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
         });
     }, [activeBaseRows, filterMode, searchQuery]);
 
+    const highlightedRow = useMemo(() => {
+        if (!highlightId) return null;
+        return rows.find((r) => r.id === highlightId) || null;
+    }, [rows, highlightId]);
+
     const selectedRowIndex = useMemo(() => {
         if (!selectedAuditRow) return -1;
         return filteredRows.findIndex((r) => r.id === selectedAuditRow.id);
@@ -307,28 +314,70 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
         }
     };
 
-    const handleCopyDossierJson = () => {
-        if (!selectedAuditRow) return;
-        const jsonPayload = {
-            record_id: selectedAuditRow.id,
-            beneficiary_name: selectedAuditRow.interview?.beneficiary?.name,
-            job_position: selectedAuditRow.job_position,
-            gender: selectedAuditRow.gender,
-            age_band: selectedAuditRow.age_band,
-            monthly_salary_etb: selectedAuditRow.monthly_salary_etb,
-            is_good_job: selectedAuditRow.is_good_job,
-            discrepancy_flag: selectedAuditRow.discrepancy_flag,
-            confirmation_source: selectedAuditRow.confirmation_source,
-            statutory_clauses: selectedAuditRow.interview?.clauseAssessments?.map((c) => ({
+    const [copiedRowId, setCopiedRowId] = useState<number | null>(null);
+
+    const generateIndividualJsonPayload = (row: SheetRow) => {
+        return {
+            record_id: row.id,
+            beneficiary_name: row.interview?.beneficiary?.name,
+            persona_type: row.interview?.beneficiary?.persona_type,
+            language: row.interview?.beneficiary?.language,
+            phone_type: row.interview?.beneficiary?.phone_type,
+            job_position: row.job_position,
+            gender: row.gender,
+            age_band: row.age_band,
+            monthly_salary_etb: row.monthly_salary_etb,
+            is_good_job: row.is_good_job,
+            discrepancy_flag: row.discrepancy_flag,
+            confirmation_source: row.confirmation_source,
+            confirmed_at: row.confirmed_at,
+            created_at: row.created_at,
+            interview_status: row.interview?.status,
+            consent_given: row.interview?.consent_given,
+            started_at: row.interview?.started_at,
+            completed_at: row.interview?.completed_at,
+            statutory_clauses: row.interview?.clauseAssessments?.map((c) => ({
                 clause_key: c.clause_key,
                 status: c.status,
                 confidence: c.confidence,
+                verifier_flag: c.verifier_flag,
+                verifier_note: c.verifier_note,
                 evidence_quote: c.evidence_quote,
+                sdg_tags: c.sdg_tags,
             })),
-            employer_confirmation: selectedAuditRow.interview?.employer_confirmation,
-            continuity_checkpoints: selectedAuditRow.interview?.continuity_checkpoints,
+            hard_case_flags: row.interview?.hardCaseFlags || row.interview?.hard_case_flags,
+            employer_confirmation: row.interview?.employerConfirmation || row.interview?.employer_confirmation,
+            continuity_checkpoints: row.interview?.continuityCheckpoints || row.interview?.continuity_checkpoints,
+            transcript_raw: row.interview?.transcript_raw,
         };
-        navigator.clipboard.writeText(JSON.stringify(jsonPayload, null, 2));
+    };
+
+    const handleDownloadRowJson = (row: SheetRow, e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        const payload = generateIndividualJsonPayload(row);
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+        const downloadAnchor = document.createElement('a');
+        const safeName = (row.interview?.beneficiary?.name || `worker_${row.id}`)
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '_');
+        downloadAnchor.setAttribute('href', dataStr);
+        downloadAnchor.setAttribute('download', `dossier_record_${row.id}_${safeName}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    };
+
+    const handleCopyRowJson = (row: SheetRow, e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        const payload = generateIndividualJsonPayload(row);
+        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+        setCopiedRowId(row.id);
+        setTimeout(() => setCopiedRowId(null), 2000);
+    };
+
+    const handleCopyDossierJson = () => {
+        if (!selectedAuditRow) return;
+        handleCopyRowJson(selectedAuditRow);
         setCopiedJson(true);
         setTimeout(() => setCopiedJson(false), 2000);
     };
@@ -547,6 +596,36 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                             </button>
                         </div>
                     )}
+
+                    {/* Celebratory Banner for Newly Saved Interview */}
+                    {highlightId && !dismissHighlight && highlightedRow && (
+                        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-emerald-950 dark:text-emerald-200 shadow-sm animate-fadeIn">
+                            <div className="flex items-center gap-3">
+                                <div className="size-9 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    <CheckCircle2 className="size-5" />
+                                </div>
+                                <div>
+                                    <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                                        <span>🎉 Interview Successfully Saved to Master Ledger!</span>
+                                        <span className="font-mono text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-bold">
+                                            Row #{highlightId}
+                                        </span>
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                                        Beneficiary <strong>{highlightedRow.interview?.beneficiary?.name || `Worker #${highlightId}`}</strong> has been evaluated across all 7 statutory clauses and synchronized into the cohort ledger below.
+                                    </div>
+                                </div>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setDismissHighlight(true)}
+                                className="text-xs h-7 rounded-lg border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 shrink-0"
+                            >
+                                Dismiss
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Strategic Metric Cards (4 Cards Grid - Bold Executive KPI Strip) */}
@@ -575,7 +654,7 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                     <span className="text-4xl sm:text-5xl font-serif font-medium tracking-tight text-foreground">
                                         {stats.total}
                                     </span>
-                                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">/ 23 Workers</span>
+                                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">Total Audited</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                                     All workers have been checked by voice interview.
@@ -785,112 +864,190 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                     </div>
 
                     {/* Enterprise Search & Filter Bar */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2 bg-card/70 rounded-2xl border border-border/70 shadow-2xs">
-                        {/* Pill Segment Controls */}
-                        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/60 rounded-2xl border border-border">
-                            <Button
-                                size="sm"
-                                variant={filterMode === 'all' ? 'default' : 'ghost'}
-                                onClick={() => setFilterMode('all')}
-                                className="text-xs h-8 rounded-xl font-medium"
-                            >
-                                All ({stats.total})
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={filterMode === 'good_jobs' ? 'default' : 'ghost'}
-                                onClick={() => setFilterMode('good_jobs')}
-                                className="text-xs h-8 rounded-xl font-medium"
-                            >
-                                Verified Good Jobs ({stats.goodJobs})
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={filterMode === 'discrepancies' ? 'default' : 'ghost'}
-                                onClick={() => setFilterMode('discrepancies')}
-                                className="text-xs h-8 rounded-xl font-medium"
-                            >
-                                Discrepancies ({stats.discrepancies})
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={filterMode === 'bilateral' ? 'default' : 'ghost'}
-                                onClick={() => setFilterMode('bilateral')}
-                                className="text-xs h-8 rounded-xl font-medium"
-                            >
-                                Bilateral Reconciled ({stats.bilateralReconciled})
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={filterMode === 'hard_cases' ? 'default' : 'ghost'}
-                                onClick={() => setFilterMode('hard_cases')}
-                                className="text-xs h-8 rounded-xl font-medium"
-                            >
-                                Hard Stops ({stats.hardCases})
-                            </Button>
+                    <div className="flex flex-col gap-3 p-3 bg-card/80 rounded-2xl border border-border shadow-2xs">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            {/* Segmented Filter Tabs */}
+                            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
+                                <Button
+                                    size="sm"
+                                    variant={filterMode === 'all' ? 'default' : 'ghost'}
+                                    onClick={() => setFilterMode('all')}
+                                    className={`text-xs h-8 px-3 rounded-lg font-medium transition-all ${
+                                        filterMode === 'all'
+                                            ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-background/80'
+                                    }`}
+                                >
+                                    <Users className="size-3.5 mr-1.5" />
+                                    <span>All Workers</span>
+                                    <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded-md bg-background/30 font-mono font-bold">
+                                        {stats.total}
+                                    </span>
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={filterMode === 'good_jobs' ? 'default' : 'ghost'}
+                                    onClick={() => setFilterMode('good_jobs')}
+                                    className={`text-xs h-8 px-3 rounded-lg font-medium transition-all ${
+                                        filterMode === 'good_jobs'
+                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-semibold'
+                                            : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10'
+                                    }`}
+                                    title="Workers meeting all 7 statutory labor criteria (100% verified)"
+                                >
+                                    <ShieldCheck className="size-3.5 mr-1.5" />
+                                    <span>Verified Good Jobs</span>
+                                    <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded-md bg-emerald-950/30 text-white font-mono font-bold">
+                                        {stats.goodJobs}
+                                    </span>
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={filterMode === 'discrepancies' ? 'default' : 'ghost'}
+                                    onClick={() => setFilterMode('discrepancies')}
+                                    className={`text-xs h-8 px-3 rounded-lg font-medium transition-all ${
+                                        filterMode === 'discrepancies'
+                                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs font-semibold'
+                                            : 'text-amber-700 dark:text-amber-400 hover:bg-amber-500/10'
+                                    }`}
+                                    title="Data conflicts between employer report and worker voice statement"
+                                >
+                                    <AlertTriangle className="size-3.5 mr-1.5" />
+                                    <span>Discrepancies</span>
+                                    <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded-md bg-amber-950/30 text-white font-mono font-bold">
+                                        {stats.discrepancies}
+                                    </span>
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={filterMode === 'bilateral' ? 'default' : 'ghost'}
+                                    onClick={() => setFilterMode('bilateral')}
+                                    className={`text-xs h-8 px-3 rounded-lg font-medium transition-all ${
+                                        filterMode === 'bilateral'
+                                            ? 'bg-sky-600 hover:bg-sky-700 text-white shadow-xs font-semibold'
+                                            : 'text-sky-700 dark:text-sky-400 hover:bg-sky-500/10'
+                                    }`}
+                                    title="Records with bilateral cross-verification between employer and worker"
+                                >
+                                    <Building2 className="size-3.5 mr-1.5" />
+                                    <span>Bilateral Reconciled</span>
+                                    <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded-md bg-sky-950/30 text-white font-mono font-bold">
+                                        {stats.bilateralReconciled}
+                                    </span>
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={filterMode === 'hard_cases' ? 'default' : 'ghost'}
+                                    onClick={() => setFilterMode('hard_cases')}
+                                    className={`text-xs h-8 px-3 rounded-lg font-medium transition-all ${
+                                        filterMode === 'hard_cases'
+                                            ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold'
+                                            : 'text-rose-700 dark:text-rose-400 hover:bg-rose-500/10'
+                                    }`}
+                                    title="Interviews halted immediately by safety interlock (e.g. Under-15 minors)"
+                                >
+                                    <AlertCircle className="size-3.5 mr-1.5" />
+                                    <span>Hard Stops</span>
+                                    <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded-md bg-rose-950/30 text-white font-mono font-bold">
+                                        {stats.hardCases}
+                                    </span>
+                                </Button>
+                            </div>
+
+                            {/* Search Input */}
+                            <div className="relative w-full md:w-80">
+                                <Search className="size-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder="Search worker name, job, language..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-background border border-border rounded-xl pl-9 pr-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground text-xs p-0.5 rounded-full hover:bg-muted"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Search Input */}
-                        <div className="relative w-full sm:w-72 p-1">
-                            <Search className="w-3.5 h-3.5 absolute left-3.5 top-3.5 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search worker, job, persona..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-background border border-border/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30 transition-all"
-                            />
-                            {searchQuery && (
+                        {/* Active Filter Helper Subtitle */}
+                        <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2 font-mono">
+                            <div className="flex items-center gap-1.5">
+                                <span className="font-sans font-medium text-foreground">Active Cohort:</span>
+                                <span>
+                                    {filterMode === 'all' && `All ${stats.total} audited beneficiaries`}
+                                    {filterMode === 'good_jobs' && `Showing ${filteredRows.length} workers meeting all 7 fair job rules (100% verified)`}
+                                    {filterMode === 'discrepancies' && `Showing ${filteredRows.length} records with employer vs worker data conflicts`}
+                                    {filterMode === 'bilateral' && `Showing ${filteredRows.length} records cross-verified from both sides`}
+                                    {filterMode === 'hard_cases' && `Showing ${filteredRows.length} safety interlock hard stops (e.g. Under-15 minors)`}
+                                </span>
+                            </div>
+                            {filterMode !== 'all' && (
                                 <button
-                                    onClick={() => setSearchQuery('')}
-                                    className="absolute right-3.5 top-3 text-muted-foreground hover:text-foreground text-xs"
+                                    type="button"
+                                    onClick={() => setFilterMode('all')}
+                                    className="text-primary hover:underline font-semibold text-[10px]"
                                 >
-                                    <X className="w-3.5 h-3.5" />
+                                    Reset to All
                                 </button>
                             )}
                         </div>
                     </div>
 
                     {/* Master Enterprise Ledger Table */}
-                    <div className="border border-border/70 rounded-2xl overflow-hidden bg-card/60 shadow-2xs">
+                    <div className="border border-border rounded-2xl overflow-hidden bg-card shadow-2xs">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs border-collapse">
                                 <thead>
-                                    <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground font-mono uppercase tracking-wider text-[10px]">
-                                        <th className="py-3.5 px-4 font-medium">Beneficiary Profile</th>
-                                        <th className="py-3.5 px-4 font-medium">Job Placement & Wage</th>
-                                        <th className="py-3.5 px-4 font-medium">Audit Reconciliation</th>
-                                        <th className="py-3.5 px-4 font-medium">
+                                    <tr className="bg-muted/60 border-b border-border text-muted-foreground font-mono uppercase tracking-wider text-[10px]">
+                                        <th className="py-3.5 px-4 font-semibold">Beneficiary Profile</th>
+                                        <th className="py-3.5 px-4 font-semibold">Job Placement & Wage</th>
+                                        <th className="py-3.5 px-4 font-semibold">Bilateral Verification</th>
+                                        <th className="py-3.5 px-4 font-semibold">
                                             <div className="flex items-center gap-1.5">
                                                 <span>7 Statutory Criteria</span>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <span className="text-[9px] font-normal lowercase tracking-normal text-muted-foreground/80 cursor-help">
-                                                            (ratio & dots)
+                                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-sans font-medium px-1.5 py-0.5 rounded-full bg-background border border-border text-foreground hover:bg-muted cursor-help">
+                                                            <Info className="size-2.5 text-primary" />
+                                                            <span>Legend</span>
                                                         </span>
                                                     </TooltipTrigger>
-                                                    <TooltipContent className="p-2.5 text-xs bg-card border border-border text-foreground shadow-md z-50">
-                                                        <div className="font-semibold mb-1">Clause Status Legend:</div>
-                                                        <div className="flex flex-col gap-1 font-mono text-[10px]">
-                                                            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                                                                <span className="size-2 rounded-full bg-emerald-500" />
-                                                                <span>Green: Met statutory requirement</span>
+                                                    <TooltipContent className="p-3 text-xs bg-card border border-border text-foreground shadow-lg z-50 max-w-xs">
+                                                        <div className="font-semibold text-xs mb-1.5">7-Clause Statutory Compliance:</div>
+                                                        <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+                                                            Each dot evaluates 1 statutory labor criterion: Age 15+, 20h/26wk Threshold, Fair Pay, No Child Labor, No Forced Labor, Non-Discrimination, Freedom of Association.
+                                                        </p>
+                                                        <div className="flex flex-col gap-1.5 font-mono text-[10px] border-t border-border pt-2">
+                                                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                                <span className="size-2.5 rounded-full bg-emerald-500 shadow-xs" />
+                                                                <span>Green: Requirement Met</span>
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                                                                <span className="size-2 rounded-full bg-amber-500" />
-                                                                <span>Amber: Unclear / Ambiguous (Follow-up probe)</span>
+                                                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold">
+                                                                <span className="size-2.5 rounded-full bg-amber-500 shadow-xs" />
+                                                                <span>Amber: Ambiguous (Follow-up probed)</span>
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-destructive">
-                                                                <span className="size-2 rounded-full bg-destructive" />
-                                                                <span>Red: Not Met / Violation</span>
+                                                            <div className="flex items-center gap-2 text-destructive font-semibold">
+                                                                <span className="size-2.5 rounded-full bg-destructive shadow-xs" />
+                                                                <span>Red: Statutory Violation / Not Met</span>
                                                             </div>
                                                         </div>
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </div>
                                         </th>
-                                        <th className="py-3.5 px-4 font-medium">Continuity & SDGs</th>
-                                        <th className="py-3.5 px-4 font-medium text-right">Audit Dossier</th>
+                                        <th className="py-3.5 px-4 font-semibold">6-Mo Continuity & SDGs</th>
+                                        <th className="py-3.5 px-4 font-semibold text-right">Audit Dossier</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/60">
@@ -910,15 +1067,19 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                             const confSource = row.confirmation_source || 'unconfirmed';
                                             const checkpoints = row.interview?.continuity_checkpoints || [];
 
+                                            const isHighlighted = highlightId && row.id === highlightId;
+
                                             return (
                                                 <tr
                                                     key={row.id}
                                                     className={`transition-colors hover:bg-muted/30 ${
-                                                        hasHardCases
-                                                            ? 'border-l-2 border-l-rose-500 bg-rose-500/[0.02]'
-                                                            : isDiscrepant
-                                                              ? 'border-l-2 border-l-amber-500 bg-amber-500/[0.02]'
-                                                              : 'border-l-2 border-l-transparent'
+                                                        isHighlighted
+                                                            ? 'border-l-4 border-l-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30'
+                                                            : hasHardCases
+                                                              ? 'border-l-2 border-l-rose-500 bg-rose-500/[0.02]'
+                                                              : isDiscrepant
+                                                                ? 'border-l-2 border-l-amber-500 bg-amber-500/[0.02]'
+                                                                : 'border-l-2 border-l-transparent'
                                                     }`}
                                                 >
                                                     {/* Beneficiary Profile */}
@@ -930,17 +1091,22 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                             <div>
                                                                 <div className="font-semibold text-foreground flex items-center gap-1.5">
                                                                     <span>{b?.name || `Worker #${row.id}`}</span>
-                                                                    {b?.persona_type === 'selam' && (
+                                                                    {isHighlighted && (
+                                                                        <span className="text-[9px] px-1.5 py-0.2 rounded-full font-mono bg-emerald-500 text-white font-bold animate-pulse shadow-xs">
+                                                                            JUST SAVED
+                                                                        </span>
+                                                                    )}
+                                                                    {b?.persona_type === 'selam' && !isHighlighted && (
                                                                         <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                                                                             Selam (EN)
                                                                         </span>
                                                                     )}
-                                                                    {b?.persona_type === 'abel' && (
+                                                                    {b?.persona_type === 'abel' && !isHighlighted && (
                                                                         <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
                                                                             Abel (AM)
                                                                         </span>
                                                                     )}
-                                                                    {b?.persona_type === 'almaz' && (
+                                                                    {b?.persona_type === 'almaz' && !isHighlighted && (
                                                                         <span className="text-[9px] px-1.5 py-0 rounded-full font-mono bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
                                                                             Almaz (OM)
                                                                         </span>
@@ -1161,17 +1327,55 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                         </div>
                                                     </td>
 
-                                                    {/* Audit Dossier Trigger */}
+                                                    {/* Audit Dossier Trigger & Individual JSON Actions */}
                                                     <td className="py-3.5 px-4 text-right">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => setSelectedAuditRow(row)}
-                                                            className="h-7 text-[11px] px-2.5 rounded-lg border-border/80 text-foreground hover:bg-muted font-medium shadow-2xs"
-                                                        >
-                                                            <span>Inspect</span>
-                                                            <ChevronRight className="w-3 h-3 ml-1 text-muted-foreground" />
-                                                        </Button>
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={(e) => handleCopyRowJson(row, e)}
+                                                                        className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                                    >
+                                                                        {copiedRowId === row.id ? (
+                                                                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                                                        ) : (
+                                                                            <Copy className="w-3.5 h-3.5" />
+                                                                        )}
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="p-1.5 text-[10px] bg-card border border-border text-foreground shadow-sm">
+                                                                    {copiedRowId === row.id ? 'Copied JSON!' : 'Copy Dossier JSON'}
+                                                                </TooltipContent>
+                                                            </Tooltip>
+
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={(e) => handleDownloadRowJson(row, e)}
+                                                                        className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                                    >
+                                                                        <Download className="w-3.5 h-3.5" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="p-1.5 text-[10px] bg-card border border-border text-foreground shadow-sm">
+                                                                    Download Dossier JSON (.json)
+                                                                </TooltipContent>
+                                                            </Tooltip>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setSelectedAuditRow(row)}
+                                                                className="h-7 text-[11px] px-2.5 rounded-lg border-border/80 text-foreground hover:bg-muted font-medium shadow-2xs"
+                                                            >
+                                                                <span>Inspect</span>
+                                                                <ChevronRight className="w-3 h-3 ml-1 text-muted-foreground" />
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1277,6 +1481,16 @@ export default function Dashboard({ rows = [], summary }: DashboardProps) {
                                                     <span>Copy JSON Dossier</span>
                                                 </>
                                             )}
+                                        </Button>
+
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleDownloadRowJson(selectedAuditRow)}
+                                            className="h-7 text-xs border-border/70 gap-1.5 shadow-2xs hover:bg-muted"
+                                        >
+                                            <Download className="w-3 h-3 text-muted-foreground" />
+                                            <span>Download JSON (.json)</span>
                                         </Button>
 
                                         <Link href="/interview">
